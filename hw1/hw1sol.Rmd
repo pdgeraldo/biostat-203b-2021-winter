@@ -53,20 +53,89 @@ Please, do **not** put these data files into Git; they are big. Do **not** copy 
 
 3. Display the contents in the folders `core`, `hosp`, `icu`. What are the functionalities of the bash commands `zcat`, `zless`, `zmore`, and `zgrep`? 
 
-```{bash}
+First, the following code will display the content in the respective directories. I counted 3 files in the `core` directory, 17 files in the `hosp` directory, and 7 files in the `icu` directory.
 
+```{bash}
+# Display files in the core folder (3 files)
+ls -l /usr/203b-data/mimic-iv/core
+# Display files in the hosp folder (17 files)
+ls -l /usr/203b-data/mimic-iv/hosp
+# Display files in the icu folder (7 files)
+ls -l /usr/203b-data/mimic-iv/icu
+```
+
+Now, let's explain the commands listed. The command `zcat` is to decompress and read a big file  (according to `help zcat` it is equivalent to `gunzip -c`, where the `-c` option means that the output is written on standard output). It is not recommended, since the screen gets overwhelmed with information.
+
+The command `zless` allows to read sections of a compressed file without decompressing the entire file, so it is very convenient to explore big files (the output is paginated). The `zmore` command works very similarly, printing the output one screen at a time too. They are equivalent to `zcat file.gz | less` and `zcat file.gz | less` respectively. In both cases, the original file remains unchanged.
+
+Finally, the `zgrep` command allows the user to search for a specific word or pattern (technically, any regular expression) inside the files. For example (see the code below), one can ask for the count (`-c` option) of the times a patient is either admitted to or discharged into an "EMERGENCY ROOM".
+
+
+```{bash, eval=FALSE}
+# Example of the commands used (not executed here)
+zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz
+zless /usr/203b-data/mimic-iv/core/admissions.csv.gz
+zmore /usr/203b-data/mimic-iv/core/admissions.csv.gz
+zgrep -c "EMERGENCY ROOM" /usr/203b-data/mimic-iv/core/admissions.csv.gz
 ```
 
 4. What's the output of following bash script?
-    ```{bash, eval=F}
-    for datafile in /usr/203b-data/mimic-iv/core/*.gz
-      do
-        ls -l $datafile
-      done
-    ```
+```{bash, eval=TRUE}
+for datafile in /usr/203b-data/mimic-iv/core/*.gz
+  do
+    ls -l $datafile
+  done
+```
+    
+As shown in the output, the code prints the list of files matching the specified extension (*.gz) that are located in the directory (in this case, `/usr/203b-data/mimic-iv/core/`).
+
 Display the number of lines in each data file using a similar loop.
 
+One way (for sure not the only way and probably not the better!) to count the number of lines in each data file using a similar loop is to first read the file, but opening the file with `zcat` and then piping the output and count the lines (with the option `wc -l`). This is the approach I illustrate below:
+
+```{bash, eval=TRUE}
+# For the files in the core folder
+for datafile in /usr/203b-data/mimic-iv/core/*.gz
+  do
+    echo "The number of lines in $datafile is "
+    zcat $datafile | wc -l
+  done
+```
+
+
+```{bash, eval=FALSE}
+# For the files in the hosp folder (takes some time to run)
+for datafile in /usr/203b-data/mimic-iv/hosp/*.gz
+  do
+    echo "The number of lines in $datafile is "
+    zcat $datafile | wc -l
+  done
+```
+
+```{bash, eval=TRUE}
+# For the files in the icu folder
+for datafile in /usr/203b-data/mimic-iv/icu/*.gz
+  do
+    echo "The number of lines in $datafile is "
+    zcat $datafile | wc -l
+  done
+```
+
 4. Display the first few lines of `admissions.csv.gz`. How many rows are in this data file? How many unique patients (identified by `subject_id`) are in this data file? What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, `language`, `marital_status`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq`, `wc`, and so on.)
+
+```{bash}
+# First, display the first 5 lines in the file
+zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | head -n 5
+
+# Second, count the rows in the data file (following the example above)
+# using tail +2 to skip the first line (header)
+echo "The number of rows in the data is "
+zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | wc -l
+
+# Third, count unique patients
+echo "The number of unique patients in the file is "
+zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | awk -F, '{print $1}' | sort | uniq -c | wc -l
+```
 
 ## Q3. Who's popular in Price and Prejudice
 
