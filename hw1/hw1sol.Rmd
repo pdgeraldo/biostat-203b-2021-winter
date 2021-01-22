@@ -267,39 +267,51 @@ The command `uname` prints the information about the system, the `-a` option is 
 uname -a
 ```
 
-The `uptime` command display the time that the server has been working, 
+The `uptime` command display the time that the server has been working, the current time, number of users currently logged in, and the average CPU use over the last 1, 5, and 15 minutes.
 
 ```{bash}
 uptime
 ```
 
+The `whoami` command displays the username of the logged user (in other words, mine)
+
 ```{bash}
 whoami
 ```
 
+The `who` command list all the users that are currently logged in.
+
 ```{bash}
 who
 ```
-
+Similarly, `w` command list all the active users but with more details, indicating where are the connected from and what they are doing.
 
 ```{bash}
 w
 ```
+The `id` command prints the (current) user, their group id and memberships, and the security credentials.
 
 ```{bash}
 id
+# Can also specify id username
 ```
+
+The command `last` lists the last users logged into the server, and when pipped to `head` it will list only the last ten (included currently logged users)
 
 ```{bash}
 last | head
 ```
+The command `echo` prints what the user enters. In this case, it subsequently concatenates what is in the first bracket with the second and the third, creating all combinations.
 
 ```{bash}
 echo {con,pre}{sent,fer}{s,ed}
 ```
 
+The command `time sleep 5` is telling the system to "freeze" for 5 seconds, and returning the elapsed time. Finally, pipping `history | tail` will print the history of last commands one has ran, keeping the last 10 (by `tail`). In this case, it is only keeping record of this particular chunck, so the record is pretty short.
+
 ```{bash}
-set -o history
+# First, activate the history record
+set -o history 
 time sleep 5
 history | tail
 ```

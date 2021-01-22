@@ -37,3 +37,6 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# Text files, such as pride and prejudice
+pride_and_prejudice.txt
