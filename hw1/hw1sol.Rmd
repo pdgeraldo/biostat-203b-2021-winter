@@ -91,7 +91,9 @@ As shown in the output, the code prints the list of files matching the specified
 
 Display the number of lines in each data file using a similar loop.
 
-One way (for sure not the only way and probably not the better!) to count the number of lines in each data file using a similar loop is to first read the file, but opening the file with `zcat` and then piping the output and count the lines (with the option `wc -l`). This is the approach I illustrate below:
+One way (for sure not the only way and probably not the better!) to count the number of lines in each data file using a similar loop is to first scan the file using `zcat` and then piping the output and count the lines (with the option `wc -l`). This is the approach I illustrate below:
+
+First, let's do it for the `core` directory:
 
 ```{bash, eval=TRUE}
 # For the files in the core folder
@@ -101,7 +103,7 @@ for datafile in /usr/203b-data/mimic-iv/core/*.gz
     zcat $datafile | wc -l
   done
 ```
-
+Now, let's consider the `hosp` directory:
 
 ```{bash, eval=FALSE}
 # For the files in the hosp folder (takes some time to run)
@@ -112,6 +114,8 @@ for datafile in /usr/203b-data/mimic-iv/hosp/*.gz
   done
 ```
 
+Finally, for the `icu` folder:
+
 ```{bash, eval=TRUE}
 # For the files in the icu folder
 for datafile in /usr/203b-data/mimic-iv/icu/*.gz
@@ -121,18 +125,36 @@ for datafile in /usr/203b-data/mimic-iv/icu/*.gz
   done
 ```
 
-4. Display the first few lines of `admissions.csv.gz`. How many rows are in this data file? How many unique patients (identified by `subject_id`) are in this data file? What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, `language`, `marital_status`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq`, `wc`, and so on.)
+5. Display the first few lines of `admissions.csv.gz`. How many rows are in this data file? How many unique patients (identified by `subject_id`) are in this data file? What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, `language`, `marital_status`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq`, `wc`, and so on.)
+
+Here, I display the first five lines of the `admissions.csv.gz` file:
 
 ```{bash}
 # First, display the first 5 lines in the file
 zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | head -n 5
+```
 
+Now, I count the number of rows in the data. I'm starting the count in line 2 to skip the header, so it will be the number of cases. The total number of rows including the header will be the same +1 (see **Q2.4** above): 
+
+```{bash}
 # Second, count the rows in the data file (following the example above)
 # using tail +2 to skip the first line (header)
+# 
 echo "The number of rows in the data is "
 zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | wc -l
+```
 
+Now, to identify unique patients, I use the code below:
+
+```{bash}
 # Third, count unique patients
+# tail -n +2: to start counting in the second row (skipping header)
+# awk -F, declares the "," as separator, 
+# and keep only the first column (subject_id): '{print $1}'
+# Then sort by id, select unique cases and count
+# This register how many times a subject appears
+# So then I counted lines (wc -l)
+
 echo "The number of unique patients in the file is "
 zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | awk -F, '{print $1}' | sort | uniq -c | wc -l
 ```
@@ -140,10 +162,22 @@ zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | awk -F, '{pri
 ## Q3. Who's popular in Price and Prejudice
 
 1. You and your friend just have finished reading *Pride and Prejudice* by Jane Austen. Among the four main characters in the book, Elizabeth, Jane, Lydia, and Darcy, your friend thinks that Darcy was the most mentioned. You, however, are certain it was Elizabeth. Obtain the full text of the novel from <http://www.gutenberg.org/cache/epub/42671/pg42671.txt> and save to your local folder. 
-    ```{bash, eval=FALSE}
-    curl http://www.gutenberg.org/cache/epub/42671/pg42671.txt > pride_and_prejudice.txt
-    ```
+
+```{bash}
+# Copy from url and export to .txt file
+curl http://www.gutenberg.org/cache/epub/42671/pg42671.txt > pride_and_prejudice.txt
+```
+
 Do **not** put this text file `pride_and_prejudice.txt` in Git. Using a `for` loop, how would you tabulate the number of times each of the four characters is mentioned?
+
+```{bash}
+for value in Elizabeth Jane Lydia Darcy
+  do
+    echo "The number of times $value is named is"
+    grep -c $value pride_and_prejudice.txt
+  done
+```
+
 
 2. What's the difference between the following two commands?
     ```{bash eval=FALSE}
@@ -154,19 +188,119 @@ Do **not** put this text file `pride_and_prejudice.txt` in Git. Using a `for` lo
     echo 'hello, world' >> test2.txt
     ```
 
+The first command, with only one assignment, will redirect the output from the screen to a file named `test1.txt`. If a file with that name does not exist, it will be created; if it exist, it will be overwritten. The second command, on the other hand, will create the file if it does not exist, but if exist it will append the new lines at the end instead of replacing the file.
+
 3. Using your favorite text editor (e.g., `vi`), type the following and save the file as `middle.sh`:
-    ```{bash eval=FALSE}
-    #!/bin/sh
-    # Select lines from the middle of a file.
-    # Usage: bash middle.sh filename end_line num_lines
-    head -n "$2" "$1" | tail -n "$3"
-    ```
-Using `chmod` make the file executable by the owner, and run 
-    ```{bash eval=FALSE}
-    ./middle.sh pride_and_prejudice.txt 20 5
-    ```
+
+```{bash eval=FALSE}
+#!/bin/sh
+# Select lines from the middle of a file.
+# Usage: bash middle.sh filename end_line num_lines
+head -n "$2" "$1" | tail -n "$3"
+```
+
+Using `chmod` make the file executable by the owner, 
+
+```{bash, eval=FALSE}
+# Make the file executable (+x)  by the owner (u)
+chmod u+x middle.sh
+```
+
+and run 
+
+```{bash}
+./middle.sh pride_and_prejudice.txt 20 5
+```
+
 Explain the output. Explain the meaning of `"$1"`, `"$2"`, and `"$3"` in this shell script. Why do we need the first line of the shell script?
+
+The author is showing the author and editor of the book, which we selected from the original `.txt` file by position: first, keeping only the first 20 lines, lines selecting the last 5 lines of the result. That is exactly the place where author and editor appears. We can change the parameters and we would move to somewhere else in the document.
+
+In the code, we have to declare the file we are analyzing (`pride_and_prejudice.txt`), the number of lines we want to keep from the beginning of the document (here, 20 lines), and them how many we want to keep from bottom up (in this case, 5 lines). So, the code is equivalent to running this line: 
+
+```{bash, eval=FALSE}
+head -n 20 pride_and_prejudice.txt | tail -n 5
+```
+
+But, since the `middle.sh` file is a program, it has placeholders for its general arguments. The `$number` indicates a position. So, basically when calling the program we enter the arguments as file, head position, tail position, but they map into the source script in the correct order. For example, our first argument `filename` goes into the second position of the original file, and so on.
+
+The first line is called a `shebang`, or the combination of hashtag and exclamation mark, that is instructing which kernel should be used to execute the file (in this case, the `sh` shell). The rest of the document is understood as `sh` code.
 
 ### Q4. More fun with Linux
 
 Try these commands in Bash and interpret the results: `cal`, `cal 2021`, `cal 9 1752` (anything unusual?), `date`, `hostname`, `arch`, `uname -a`, `uptime`, `who am i`, `who`, `w`, `id`, `last | head`, `echo {con,pre}{sent,fer}{s,ed}`, `time sleep 5`, `history | tail`.
+
+The commands `cal` prints the current month, while `cal year` will print the entire calendar for the indicated year.
+
+```{bash, eval = FALSE}
+cal # Outputs the calendar of the current year/month
+cal 2021 # Outputs the calendar of the entire year
+```
+
+A special situation happens with `cal 9 1752`, which prints a month skipping from the day 2 directly to 14. According to [Wikipedia](https://en.wikipedia.org/wiki/Cal_(Unix)), this is due to the adoption of the Gregorian calendar (from the previous Julian) that month and year in Britain.
+
+```{bash}
+cal 9 1752
+```
+The command `date` prints the current day, date and time in the UTC time zone.
+
+```{bash}
+date
+```
+
+The command `hostname` prints the name of the server one is working on, in this case, the server for this class.
+
+```{bash}
+hostname
+```
+
+The command `arch` prints the computer architecture of the server. In this particular case, is a `x86_64` machine. I tried finding some more information about this and I understood that it has to do with the specific hardware used and its storing/computation capabilities. More in [Wikipedia](https://en.wikipedia.org/wiki/X86-64)
+
+```{bash}
+arch
+# uname -m would return the same
+```
+
+The command `uname` prints the information about the system, the `-a` option is to print it all (including operating system, the network information, kernel information and release, processor). More information [here](https://www.computerhope.com/unix/uuname.htm)
+
+```{bash}
+uname -a
+```
+
+The `uptime` command display the time that the server has been working, 
+
+```{bash}
+uptime
+```
+
+```{bash}
+whoami
+```
+
+```{bash}
+who
+```
+
+
+```{bash}
+w
+```
+
+```{bash}
+id
+```
+
+```{bash}
+last | head
+```
+
+```{bash}
+echo {con,pre}{sent,fer}{s,ed}
+```
+
+```{bash}
+set -o history
+time sleep 5
+history | tail
+```
+
