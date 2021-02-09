@@ -119,7 +119,7 @@ icustays %>%
   # Measured in numbers of days
   mutate(staytime = as_date(outtime) - as_date(intime),
          staydays = as.numeric(staytime),
-         staylog = log(staydays)) %>% 
+         staylog = log(staydays)) + 
   ggplot(aes(x = staylog)) +
   geom_histogram()
 ```
@@ -127,13 +127,17 @@ icustays %>%
 - first ICU unit  
 
 ```{r}
-
+icustays %>%
+  ggplot(aes(x = first_careunit)) +
+  geom_bar()
 ```
 
 - last ICU unit  
 
 ```{r}
-
+icustays %>%
+  ggplot(aes(x = last_careunit)) +
+  geom_bar()
 ````
 
 
