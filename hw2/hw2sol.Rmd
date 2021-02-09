@@ -55,15 +55,87 @@ There are quite a few utilities in R for reading data files. Let us test the spe
 
 In this homework, we stick to the tidyverse or data.table.
 
+Let's figure out the reading times for the `admissions` file. We will use the `system.time` function to measure how long does it takes for each function to run. To avoid repeating the waiting time when knitting, I am commenting out the functions and pasting the output of each run.
+
+As we can see, the base R function `read.csv` is the slowest one, taking around 46 second to read the data. The tidyverse-based function `read_csv` greatly improves upon the base R version, reading the data in 4.5 second. Finally, `data.table::fread` further improves completing the task in 2.7 seconds. One would expect the different to be even more substantial for bigger datasets.
+
+```{r, eval=FALSE, cache=TRUE}
+# First, use the native read.csv
+read.csv(paste0(mimic_path,"/core/admissions.csv.gz")) %>%
+  system.time()
+#   user  system elapsed 
+# 46.386   0.002  46.428 
+
+# Second, use tidyverse read_csv
+read_csv(paste0(mimic_path,"/core/admissions.csv.gz")) %>%
+  system.time()
+#   user  system elapsed 
+#  4.563   0.000   4.654 
+
+# Finally, use data.table fread function
+fread(paste0(mimic_path,"/core/admissions.csv.gz")) %>%
+  system.time()
+#   user  system elapsed 
+#  2.728   0.000   1.708
+```
+
 ## Q3. ICU stays
 
 `icustays.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/icu/icustays/>) contains data about Intensive Care Units (ICU) stays. Summarize following variables using appropriate numerics or graphs:   
 
 - how many unique `stay_id`?  
 - how many unique `subject_id`?  
+
+To answer those questions, I will use the following code. Basically, this is subsetting the data to the list of unique ids, and then counting the length of the resulting vector.
+
+```{r, eval=FALSE}
+# First, let's read the data
+icustays <- 
+  fread(paste0(mimic_path,"/icu/icustays.csv.gz"))
+
+# Unique stay_id
+# Notice that the number of unique stay_id
+# is the same as the rows in the data 
+# nrow(icustays)
+length(unique(icustays$stay_id))
+
+# Unique subject_id
+length(unique(icustays$subject_id))
+```
+
+We can see that there are `r length(unique(icustays$stay_id))` unique `stay_id` and `r length(unique(icustays$subject_id))` unique `stay_id` in the data. 
+
 - length of ICU stay  
+
+For this question, it is probably more convenient to graph the data and explore the overall distribution of the stays in the ICU. We will also need to create the variable for the length of stay.
+
+First, let's try an histogram
+
+```{r}
+icustays %>%
+  # Create the staytime variable
+  # I use the function lubridate::as_date
+  # The resulting is a "difftime" variable type
+  # Measured in numbers of days
+  mutate(staytime = as_date(outtime) - as_date(intime),
+         staydays = as.numeric(staytime),
+         staylog = log(staydays)) %>% 
+  ggplot(aes(x = staylog)) +
+  geom_histogram()
+```
+
 - first ICU unit  
+
+```{r}
+
+```
+
 - last ICU unit  
+
+```{r}
+
+````
+
 
 ## Q4. `admission` data
 
