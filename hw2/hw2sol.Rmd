@@ -109,19 +109,29 @@ We can see that there are `r length(unique(icustays$stay_id))` unique `stay_id` 
 
 For this question, it is probably more convenient to graph the data and explore the overall distribution of the stays in the ICU. We will also need to create the variable for the length of stay.
 
-First, let's try an histogram
+I tried several options, including boxplot, but due to very large outliers the best option seems to be an histogram on the log scale:
 
 ```{r}
+# Create the staytime variable
+# If I use the function lubridate::as_date
+# The resulting is a "difftime" variable type
+# Measured in numbers of days
+# Here I use lubridate::ymd_hms
+# Measured in minutes
 icustays %>%
-  # Create the staytime variable
-  # I use the function lubridate::as_date
-  # The resulting is a "difftime" variable type
-  # Measured in numbers of days
-  mutate(staytime = as_date(outtime) - as_date(intime),
+  mutate(staytime = ymd_hms(outtime) - ymd_hms(intime),
+         # Bc log is not defined by difftime
          staydays = as.numeric(staytime),
-         staylog = log(staydays)) + 
+         # Take log for better plotting
+         staylog = log(staydays)) %>%
   ggplot(aes(x = staylog)) +
-  geom_histogram()
+  # Can use ..density.. instead
+  geom_histogram(aes(y = ..count..)) +
+  labs(title = "Length of stay in ICU",
+       x = "Logarithm of ICU stay (in minutes)", 
+       y = "Number of patients",
+       fill = "Care unit") +
+  theme_bw()
 ```
 
 - first ICU unit  
@@ -129,7 +139,16 @@ icustays %>%
 ```{r}
 icustays %>%
   ggplot(aes(x = first_careunit)) +
-  geom_bar()
+  geom_bar(aes(fill = first_careunit)) +
+  labs(title = "First ICU unit in hospital",
+       x = "", y = "Number of patients",
+       fill = "Care unit") +
+  theme_bw() +
+  # Remove x axis to avoid repeating the labels
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+#  theme(axis.text.x = 
+#          element_text(angle = 90, vjust = 0.5, hjust = 1))
 ```
 
 - last ICU unit  
@@ -137,7 +156,13 @@ icustays %>%
 ```{r}
 icustays %>%
   ggplot(aes(x = last_careunit)) +
-  geom_bar()
+  geom_bar(aes(fill = last_careunit)) +
+  labs(title = "Last ICU unit in hospital",
+       x = "", y = "Number of patients",
+       fill = "Care unit") +
+  theme_bw() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
 ````
 
 
@@ -163,6 +188,13 @@ Information of the patients admitted into hospital is available in `admissions.c
 
 Note it is possible that one patient (uniquely identified by the `subject_id`) is admitted into hospital multiple times. When summarizing some demographic information, it makes sense to summarize based on unique patients. 
 
+```{r}
+# First, let's read the data
+admissions <- 
+  read_csv(paste0(mimic_path,"/core/admissions.csv.gz"))
+dim(admissions)
+```
+
 ## Q5. `patient` data
 
 Explore `patients.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/core/patients/>) and summarize following variables using appropriate numerics and graphs:  
@@ -170,11 +202,24 @@ Explore `patients.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/core/patients
 - `gender`  
 - `anchor_age` (explain pattern you see)
 
+```{r}
+# First, let's read the data
+patients <- 
+  read_csv(paste0(mimic_path,"/core/patients.csv.gz"))
+```
+
 ## Q6. Lab results
 
 `labevents.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/hosp/labevents/>) contains all laboratory measurements for patients. 
 
 We are interested in the lab measurements of creatinine (50912), potassium (50971), sodium (50983), chloride (50902), bicarbonate (50882), hematocrit (51221), white blood cell count (51301), glucose (50931), magnesium (50960), calcium (50893), and lactate (50813). Find the `itemid`s of these lab measurements from `d_labitems.csv.gz` and retrieve a subset of `labevents.csv.gz` only containing these items.
+
+```{r}
+# First, let's read the dictionary
+dlabitems <- 
+  read_csv(paste0(mimic_path,"/hosp/d_labitems.csv.gz"))
+
+```
 
 ## Q7. Vitals from chartered events
 
@@ -183,6 +228,23 @@ We are interested in the vitals for ICU patients: heart rate, mean and systolic 
 `chartevents.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/icu/chartevents/>) contains all the charted data available for a patient. During their ICU stay, the primary repository of a patient’s information is their electronic chart. The `itemid` variable indicates a single measurement type in the database. The `value` variable is the value measured for `itemid`.
 
 `d_items.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/icu/d_items/>) is the dictionary for the `itemid` in `chartevents.csv.gz`. 
+
+```{r}
+# First, let's read the data
+dchartitems <- 
+  read_csv(paste0(mimic_path,"/icu/d_items.csv.gz"))
+names(dchartitems)
+```
+```{r, eval=FALSE}
+# Arterial: invasive
+# Non Invasive: well, non invasive
+items <- c("heart rate", "Blood Pressure mean", 
+           "systolic", "temperature", "sp02", 
+           "respiratory rate")
+for(chartitem in items){
+  
+}
+```
 
 ## Q8. Putting things together
 
