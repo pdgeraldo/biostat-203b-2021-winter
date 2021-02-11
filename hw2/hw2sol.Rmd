@@ -2,7 +2,7 @@
 title: "Biostat 203B Homework 2"
 author: Pablo Geraldo
 data: \today
-subtitle: Due ~~Feb 5~~ Feb 10 @ 11:59PM
+subtitle: Due ~~Feb 5~~ Feb 12 @ 11:59PM
 output: 
   html_document:
     toc: true
@@ -57,7 +57,9 @@ In this homework, we stick to the tidyverse or data.table.
 
 Let's figure out the reading times for the `admissions` file. We will use the `system.time` function to measure how long does it takes for each function to run. To avoid repeating the waiting time when knitting, I am commenting out the functions and pasting the output of each run.
 
-As we can see, the base R function `read.csv` is the slowest one, taking around 46 second to read the data. The tidyverse-based function `read_csv` greatly improves upon the base R version, reading the data in 4.5 second. Finally, `data.table::fread` further improves completing the task in 2.7 seconds. One would expect the different to be even more substantial for bigger datasets.
+As we can see, the base R function `read.csv` is the slowest one, taking around 46 second to read the data. The tidyverse-based function `read_csv` greatly improves upon the base R version, reading the data in 4.5 second. Finally, `data.table::fread` further improves completing the task in only 2.7 seconds. One would expect the difference to be even more substantial for bigger datasets.
+
+**Note**: I tried this several times and of course there is a lot of variation, depending on the load of the server's memory. There are cases in which the base r version takes substantively longer, and cases in which dplyr and data.table are not that different. So this is not a formal benchmarking.
 
 ```{r, eval=FALSE, cache=TRUE}
 # First, use the native read.csv
@@ -107,9 +109,9 @@ We can see that there are `r length(unique(icustays$stay_id))` unique `stay_id` 
 
 - length of ICU stay  
 
-For this question, it is probably more convenient to graph the data and explore the overall distribution of the stays in the ICU. We will also need to create the variable for the length of stay.
+For this question, it is probably more convenient to graph the data and explore the overall distribution of the stays in the ICU, instead of providing a single numerical summary. We will need to create the variable for the length of stay.
 
-I tried several options, including boxplot, but due to very large outliers the best option seems to be an histogram on the log scale:
+I tried several options, but due to very large outliers the best option seems to be transforming stay to the log scale, and using either a boxplot or an histogram:
 
 ```{r}
 # Create the staytime variable
@@ -118,6 +120,30 @@ I tried several options, including boxplot, but due to very large outliers the b
 # Measured in numbers of days
 # Here I use lubridate::ymd_hms
 # Measured in minutes
+# So the plot is more precise and looks better
+icustays <- icustays %>%
+  mutate(staytime = ymd_hms(outtime) - ymd_hms(intime),
+         # Bc log is not defined by difftime
+         staydays = as.numeric(staytime),
+         # Take log for better plotting
+         staylog = log(staydays))
+
+# Load the gridExtra library
+# To overlay the histogram and boxplot
+suppressMessages(library(gridExtra))
+
+# First, create the histogram
+
+  ggplot(aes(x = staylog)) +
+  # Can use ..density.. instead
+  geom_histogram(aes(y = ..count..)) +
+  labs(title = "Length of stay in ICU",
+       x = "Logarithm of ICU stay (in minutes)", 
+       y = "Number of patients",
+       fill = "Care unit") +
+  theme_bw()
+```
+```{r}
 icustays %>%
   mutate(staytime = ymd_hms(outtime) - ymd_hms(intime),
          # Bc log is not defined by difftime
@@ -126,11 +152,7 @@ icustays %>%
          staylog = log(staydays)) %>%
   ggplot(aes(x = staylog)) +
   # Can use ..density.. instead
-  geom_histogram(aes(y = ..count..)) +
-  labs(title = "Length of stay in ICU",
-       x = "Logarithm of ICU stay (in minutes)", 
-       y = "Number of patients",
-       fill = "Care unit") +
+  geom_boxplot() +
   theme_bw()
 ```
 
@@ -229,7 +251,7 @@ We are interested in the vitals for ICU patients: heart rate, mean and systolic 
 
 `d_items.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/icu/d_items/>) is the dictionary for the `itemid` in `chartevents.csv.gz`. 
 
-```{r}
+```{r, eval=FALSE}
 # First, let's read the data
 dchartitems <- 
   read_csv(paste0(mimic_path,"/icu/d_items.csv.gz"))
@@ -244,6 +266,13 @@ items <- c("heart rate", "Blood Pressure mean",
 for(chartitem in items){
   
 }
+```
+
+```{r, eval=FALSE}
+
+# See trial 3 from professor Zhou
+# Using bash instead of R
+# It takes around 27 minutes
 ```
 
 ## Q8. Putting things together
@@ -261,4 +290,11 @@ and columns contain at least following variables
 - first lab measurements during ICU stay  
 - first vitals measurement during ICU stay  
 - an indicator variable whether the patient died within 30 days of hospital admission  
+
+```{r, eval=FALSE}
+# Load the data
+# 49,971 rows in this data
+
+# Merge the patient data
+```
 
