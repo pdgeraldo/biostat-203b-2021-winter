@@ -802,31 +802,80 @@ for(chartitem in items){
 Let us create a tibble for all ICU stays, where rows are  
 
 - first ICU stay of each unique patient  
-- adults (age at admission > 18)  
+- adults (age at admission $\geq$ 18)  
 
 and columns contain at least following variables  
 
 - all variables in `icustays.csv.gz`  
 - all variables in `admission.csv.gz`  
 - all variables in `patients.csv.gz`  
-- first lab measurements during ICU stay  
-- first vitals measurement during ICU stay  
-- an indicator variable whether the patient died within 30 days of hospital admission  
 
-```{r, eval=FALSE}
-# First, let's load and filter the admissions data
+### Solution
+
+First, I will merge some of the datasets, using as a reference the first icu admission in the icu data. The rest of the datasets are merged only if they are present in the reference data (`left_join`).
+
+```{r}
+# Load admissions data
+admissions <- 
+  fread(paste0(mimic_path,"/core/admissions.csv.gz"))
+
+# Load the patients data
+patients <- 
+  fread(paste0(mimic_path,"/core/patients.csv.gz"))
+
+# First, let's load and filter the data
 icu_first <- 
-  fread(paste0(mimic_path,"/icu/icustays.csv.gz"))
-  admissions %>%
+  # Read the data
+  fread(paste0(mimic_path,"/icu/icustays.csv.gz")) %>%
+  # Transform to tibble
+  as_tibble() %>%
   # Format as date, then numeric
-  # The second step is not necessary
-  # But is faster than work on dates
-  mutate(admit = as.numeric(as_date(admittime))) %>%
+  # The second step (as.numeric) is not necessary
+  # But is faster than work directly on dates
+  mutate(admit = as.numeric(as_date(intime))) %>%
   group_by(subject_id) %>%
   # Select the first date
   # Break ties keeping the first appearance
   slice_min(admit, with_ties = FALSE) %>%
-  ungroup()
+  ungroup() %>%
+  left_join(patients, by = "subject_id") %>%
+  left_join(admissions, by = c("subject_id","hadm_id")) %>%
+  # Calculate age at icu hospitalization
+  mutate(age_admission = 
+           year(admittime) - anchor_year + anchor_year) %>%
+  # Keep only adults (>=18) at admissions
+  filter(age_admission >= 18)
 
+# Delete auxiliary data to save memory
+rm(admissions, patients)
+print(icu_first, width = Inf)
+```
+
+Now I will add the labs and vitals measurement:
+
+- first lab measurements during ICU stay  
+- first vitals measurement during ICU stay  
+- an indicator variable whether the patient died within 30 days of hospital admission  
+
+```{r}
+# Merge the first lab measurement for each lab
+# Read the smaller data
+labevents_short <- 
+  fread(paste0(derived_path, "labevents_filtered_itemid.csv.gz"),
+        nThread = 4)
+
+# Add colnames
+# Create a vector of names
+# Taken from the original code that created the short file
+col_names <- 
+  c("subject_id", "hadm_id", "itemid", "charttime", "valuenum")
+# Assign to the data.frame
+names(labevents_short) <- col_names
+
+# Print the results
+labevents_short %>%
+  as_tibble() %>% dim()
+  
+  print(width = Inf)
 ```
 
