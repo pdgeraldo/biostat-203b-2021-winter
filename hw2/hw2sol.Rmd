@@ -745,9 +745,16 @@ col_names <-
 # Assign to the data.frame
 names(labevents_short) <- col_names
 
+# Shorten the results
+# To keep only the ones in icustays
+labevents_short <-
+  icustays %>%
+  select(subject_id, hadm_id) %>%
+  left_join(labevents_short, by = c("subject_id","hadm_id")) %>%
+  as_tibble()
+
 # Print the results
 labevents_short %>%
-  as_tibble() %>%
   print(width = Inf)
 ```
 
@@ -760,41 +767,29 @@ We are interested in the vitals for ICU patients: heart rate, mean and systolic 
 
 `d_items.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/icu/d_items/>) is the dictionary for the `itemid` in `chartevents.csv.gz`. 
 
+
+### Solution
+
+As in the question above, I had some trouble reading the big files, some I am using the subset of the data posted on the derived data folder.
+
 ```{r}
-# First, let's read the data
-dchartitems <- 
-  fread(paste0(mimic_path,"/icu/d_items.csv.gz")) %>% 
+# Read the smaller data
+vitals_short <- 
+  fread(paste0(derived_path, "chartevents_filtered_itemid.csv.gz"),
+        header = FALSE,
+        col.names = c("subject_id","hadm_id",
+                      "stay_id","charttime",
+                      "vitemid","valuenum"),
+        nThread = 4) %>%
   as_tibble()
-# class(dchartitems$itemid) # Integer
-print(dchartitems, width = Inf)
-```
 
-Now, let's select the items of interest:
-
-```{r, eval=FALSE}
-labitems <- "Creatinine"
-creatinine_items <- tibble %>%
-  filter(str_detect(label, regex(labitems, ignore_case = TRUE))) %>%
-  print()
-```
-
-
-```{r, eval=FALSE}
-# Arterial: invasive
-# Non Invasive: well, non invasive
-items <- c("heart rate", "Blood Pressure mean", 
-           "systolic", "temperature", "sp02", 
-           "respiratory rate")
-for(chartitem in items){
-  
-}
-```
-
-```{r, eval=FALSE}
-
-# See trial 3 from professor Zhou
-# Using bash instead of R
-# It takes around 27 minutes
+# Shorten the results
+# To keep only the ones in icustays
+vitals_short <-
+  icustays %>%
+  select(subject_id, hadm_id) %>%
+  left_join(vitals_short, by = c("subject_id","hadm_id")) %>%
+  as_tibble()
 ```
 
 ## Q8. Putting things together
@@ -848,7 +843,6 @@ icu_first <-
 
 # Delete auxiliary data to save memory
 rm(admissions, patients)
-print(icu_first, width = Inf)
 ```
 
 Now I will add the labs and vitals measurement:
@@ -858,24 +852,55 @@ Now I will add the labs and vitals measurement:
 - an indicator variable whether the patient died within 30 days of hospital admission  
 
 ```{r}
-# Merge the first lab measurement for each lab
-# Read the smaller data
-labevents_short <- 
-  fread(paste0(derived_path, "labevents_filtered_itemid.csv.gz"),
-        nThread = 4)
+# Pre-process labevents to keep only relevant data
+labevents_short <-
+  icu_first %>%
+  # inttime numeric for faster computation
+  mutate(intime_num = as.numeric(as_date(intime))) %>%
+  # Select the vars I'll use to filter labevents
+  select(subject_id, hadm_id, intime_num) %>% 
+  # Merge lab data
+  left_join(labevents_short, 
+            by= c("subject_id","hadm_id")) %>%
+  # charttime numeric for faster computation
+  mutate(charttime_num = as.numeric(as_date(charttime))) %>%
+  # drop labs before hospitalization (if any)
+  filter(charttime_num >= intime_num) %>%
+  group_by(subject_id, itemid) %>%
+  slice_min(charttime_num, with_ties = FALSE) %>%
+  select(-intime_num, -charttime, -charttime_num) %>%
+  pivot_wider(names_from = itemid, values_from = valuenum) 
+  
+# Merge all with labevents
+icu_first <-
+  icu_first %>%
+  left_join(labevents_short, by = c("subject_id", "hadm_id"))
 
-# Add colnames
-# Create a vector of names
-# Taken from the original code that created the short file
-col_names <- 
-  c("subject_id", "hadm_id", "itemid", "charttime", "valuenum")
-# Assign to the data.frame
-names(labevents_short) <- col_names
+# Drop auxiliary file to save memory
+rm(labevents_short)
+
+# Pre-process vitals to keep only relevant data
+vitals_short <-
+  icu_first %>%
+  # inttime numeric for faster computation
+  mutate(intime_num = as.numeric(as_date(intime))) %>%
+  # Select the vars I'll use to filter labevents
+  select(subject_id, hadm_id, intime_num) %>% 
+  # Merge lab data
+  left_join(vitals_short, 
+            by= c("subject_id","hadm_id")) %>%
+  # charttime numeric for faster computation
+  mutate(charttime_num = as.numeric(as_date(charttime))) %>%
+  # drop labs before hospitalization (if any)
+  filter(charttime_num >= intime_num) %>%
+  group_by(subject_id, itemid) %>%
+  slice_min(charttime_num, with_ties = FALSE) %>%
+  select(-stay_id, -charttime, -charttime_num) %>%
+  pivot_wider(names_from = vitemid, values_from = valuenum) 
+
+# Drop auxiliary file to save memory
 
 # Print the results
-labevents_short %>%
-  as_tibble() %>% dim()
-  
-  print(width = Inf)
+print(icu_first, width = Inf)
 ```
 
