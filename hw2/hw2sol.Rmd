@@ -46,6 +46,8 @@ system(str_c("tree -s -L 2 ", shQuote(mimic_path)), intern = TRUE)
 
 At this moment, you should already get credentialed on the PhysioNet. Please include a screenshot of your `Data Use Agreement for the MIMIC-IV (v0.4)`.
 
+### Solution
+
 ![Here is a copy to my credentials to use MIMIC-IV data](PabloGeraldo_MIMIC_IV_Credentials.png)
 
 
@@ -55,7 +57,9 @@ There are quite a few utilities in R for reading data files. Let us test the spe
 
 In this homework, we stick to the tidyverse or data.table.
 
-Let's figure out the reading times for the `admissions` file. We will use the `system.time` function to measure how long does it takes for each function to run. To avoid repeating the waiting time when knitting, I am commenting out the functions and pasting the output of each run.
+### Solution
+
+Let's figure out the reading times for the `admissions` file. We will use the `system.time` function to measure how long does it takes for each function to run. To avoid repeating the waiting time when knitting, I am commenting out the functions and pasting the output from each run.
 
 As we can see, the base R function `read.csv` is the slowest one, taking around 46 second to read the data. The tidyverse-based function `read_csv` greatly improves upon the base R version, reading the data in 4.5 second. Finally, `data.table::fread` further improves completing the task in only 2.7 seconds. One would expect the difference to be even more substantial for bigger datasets.
 
@@ -88,9 +92,11 @@ fread(paste0(mimic_path,"/core/admissions.csv.gz")) %>%
 - how many unique `stay_id`?  
 - how many unique `subject_id`?  
 
+### Solution
+
 To answer those questions, I will use the following code. Basically, this is subsetting the data to the list of unique ids, and then counting the length of the resulting vector.
 
-```{r, eval=FALSE}
+```{r}
 # First, let's read the data
 icustays <- 
   fread(paste0(mimic_path,"/icu/icustays.csv.gz"))
@@ -197,7 +203,7 @@ icustays %>%
 ````
 
 ```{r, echo = FALSE}
-rm(icustays)
+rm(icustays, stay_box, stay_hist)
 ```
 
 ## Q4. `admission` data
@@ -205,6 +211,8 @@ rm(icustays)
 Information of the patients admitted into hospital is available in `admissions.csv.gz`. See <https://mimic-iv.mit.edu/docs/datasets/core/admissions/> for details of each field in this file. Summarize following variables using appropriate graphs. Explain any patterns you observe.   
 
 Note it is possible that one patient (uniquely identified by the `subject_id`) is admitted into hospital multiple times. When summarizing some demographic information, it makes sense to summarize based on unique patients. 
+
+### Solution
 
 First, let's read the data and save it to the object `admissions`. We can see that there are 524,520 rows and 15 columns.
 
@@ -274,7 +282,7 @@ admissions %>%
 
 * Admission week day  
 
-According to the plot, admissions do not vary a lot by different weekdays, with the sole noticeable although small bump on Saturdays.
+According to the plot, admissions do not vary a lot by different weekdays, with the sole noticeable although small bump on Saturdays (maybe more accidents? I can't tell).
 
 ```{r}
 admissions %>%
@@ -361,11 +369,12 @@ admissions %>%
   # summarise(max(admit_num)) # 238 times!
   # Then plot
   ggplot(aes(x = admit_num)) +
-  geom_histogram(fill = "steelblue") +
+  geom_histogram(fill = "steelblue", binwidth = 1) +
   # geom_boxplot() +
   labs(title = "Number of admissions per patient",
        x = "Number of admissions", 
        y = "Number of patients") +
+  scale_x_continuous(breaks = seq(0, 250, by=25)) +
   theme_bw()
 ```
 
@@ -403,14 +412,12 @@ admissions %>%
 
 * Insurance  
 
-For this question, I am assuming that insurance is a time-invariante individual characteristic, which is not necessarily realistic (in fact, they *do* vary, as specified in the documentation) but this strategy is preferably when analyzing the composition of the hospitalized patients over time ito prevent counting multiple times patients with multiple admissions. So I am keeping only one admission per patient (N = 257,366).
+For this question, I am assuming that insurance is a time-invariante individual characteristic, which is not necessarily realistic (in fact, they *do* vary, as specified in the documentation) but this strategy is preferably when analyzing the composition of the hospitalized patients over time to prevent counting multiple times patients with multiple admissions. So I am keeping only one admission per patient (N = 257,366).
 
 Among those patients, we can see that almost 10% have Medicaid, slightly more than 20% have Medicare, while the remaining 70% have other type of insurance. It is unclear if the "Other" category includes uninsured, but this is likely.
 
 ```{r}
-# I will overwrite the admissions object
-# To avoid duplicating and save some memory
-admissions <- 
+admissions_first <- 
   admissions %>%
   # Format as date, then numeric
   # The second step is not necessary
@@ -423,7 +430,7 @@ admissions <-
   ungroup()
 
 # Plot the distribution by insurances
-admissions %>%
+admissions_first %>%
   # Yaxis: Insurance/N
   ggplot(aes(x = insurance, y = (..count..)/sum(..count..))) +
   geom_bar(aes(fill = insurance)) +
@@ -442,7 +449,7 @@ The language variable is not very specific, listing only if the patient speaks E
 
 ```{r}
 # Plot the distribution of language
-admissions %>%
+admissions_first %>%
   # Yaxis: Language/N
   ggplot(aes(x = language, y = (..count..)/sum(..count..))) +
   geom_bar(aes(fill = language)) +
@@ -462,7 +469,7 @@ Married is the most prevalent category, followed closely by Single, each represe
 
 ```{r}
 # Plot the distribution of marital status
-admissions %>%
+admissions_first %>%
   # Yaxis: status/N
   ggplot(aes(x = marital_status, y = (..count..)/sum(..count..))) +
   geom_bar(aes(fill = marital_status)) +
@@ -482,7 +489,7 @@ The ethnicity data show us that White is by far the most prevalent ethnicity in 
 
 ```{r}
 # Plot the distribution of ethnicity
-admissions %>%
+admissions_first %>%
   # Yaxis: Ethnicity/N
   ggplot(aes(x = ethnicity, y = (..count..)/sum(..count..))) +
   geom_bar(aes(fill = ethnicity)) +
@@ -499,35 +506,95 @@ admissions %>%
 
 * Death 
 
-I don't understand what is required here
+Here I will do a similar filtering than above, to keep only one observation per patient, but instead of keeping the first, I am keeping the last hospital admission. The logic is that, if a patient with multiple registered visits to the hospital dies, it should has been on their last visit.
 
-```{r, eval=FALSE}
-# Plot the distribution of ethnicity
-admissions %>%
-  # Yaxis: Ethnicity/N
-  ggplot(aes(x = ethnicity, y = (..count..)/sum(..count..))) +
-  geom_bar(aes(fill = ethnicity)) +
-  labs(title = "Patient ethnicity",
-       x = "", y = "Percentage of patients",
-       fill = "Patient's ethnicity") +
+First, let's compare the data from `deathtime`, containing the date and time of death when corresponds (empty otherwise), and `hospital_expire_flag`, an indicator for patient dying during hospitalization or not. As we can see below, the information from both variables is highly consistent, showing slightly less than 5% of patients dying in hospital over the period (it should be even less considering multiple hospitalizations). 
+
+```{r}
+# I will overwrite the admissions object
+# To avoid duplicating and save some memory
+admissions_last <- 
+  admissions %>%
+  # Format as date, then numeric
+  # The second step is not necessary
+  # But is faster than work on dates
+  mutate(admit = as.numeric(as_date(admittime))) %>%
+  group_by(subject_id) %>%
+  # Select the last date
+  # Break ties keeping the last appearance
+  slice_max(admit, with_ties = FALSE) %>%
+  ungroup()
+
+# Plot the percentage death 
+# Comparing flag and deathtime
+deathtime_bar <-
+  admissions_last %>%
+  # Create death indicator
+  mutate(death_indicator =
+           ifelse(deathtime == "", 
+                  "No death time", "Registered death time")) %>%
+  # Yaxis: Death/N
+  ggplot(aes(x = death_indicator, y = (..count..)/sum(..count..))) +
+  geom_bar(aes(fill = death_indicator)) +
+  labs(title = "Does the patient have a registered death time?",
+       x = "", y = "Percentage of patients") +
   theme_bw() +
   # Scale Yaxis as percentages
   scale_y_continuous(breaks = seq(0, 1, by = 0.1),
                      labels = scales::percent) +
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
+  theme(legend.position = "none")
+
+deathflag_bar <-
+  admissions_last %>%
+  mutate(death_flag = 
+           ifelse(hospital_expire_flag == 0,
+                  "No death flag", "Death flag")) %>%
+  # Yaxis: Death/N
+  ggplot(aes(x = death_flag, y = (..count..)/sum(..count..))) +
+  geom_bar(aes(fill = death_flag)) +
+  labs(title = "Is the patient flagged as dead?",
+       x = "", y = "Percentage of patients") +
+  theme_bw() +
+  # Scale Yaxis as percentages
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1),
+                     labels = scales::percent) +
+  theme(legend.position = "none")
+  
+# Finally, combine both plots
+grid.arrange(deathtime_bar, deathflag_bar, nrow = 1)
 ```
 
+However, they are not identical, because there are `r nrow(admissions_last) - sum(ifelse(admissions_last$deathtime=="",0,1) == admissions_last$hospital_expire_flag)` cases of discrepancy.
+
+We can finally describe the percentage of deaths among last hospitalization over the years. We can see that the percentage of people dying during hospitalization moves between 2.5 and 7.5%, and it seems to be an upward trend. The drop at the end is probably explained by the truncation of the masked years.
+
+```{r}
+admissions_last %>%
+  mutate(admityear = lubridate::year(admittime)) %>%
+  group_by(admityear) %>%
+  summarise(nyear = n(),
+            ndeath = sum(hospital_expire_flag),
+            pdeath = ndeath/nyear*100) %>% 
+  ggplot(aes(x = admityear, y = pdeath)) +
+  geom_line() +
+  labs(title = "Percentage of patients death by year",
+       x = "Year", y = "Percentage") +
+  theme_bw() +
+  scale_y_continuous(breaks = seq(0, 100, by = 5),
+                     limits = c(0,10)) +
+  theme(legend.position = "none")
+```
+
+
 ```{r, echo = FALSE}
-rm(admissions)
+rm(admissions, admissions_first, admissions_last, deathflag_bar, deathtime_bar)
 ```
 
 ## Q5. `patient` data
 
 Explore `patients.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/core/patients/>) and summarize following variables using appropriate numerics and graphs:  
 
-- `gender`  
-- `anchor_age` (explain pattern you see)
+### Solution
 
 ```{r}
 # First, let's read the data
@@ -540,6 +607,8 @@ names(patients)
 We can see that, in the patient data, there are 383,220 observations and 6 variables.
 
 * Exploring `gender` variable
+
+According to the graph, there is slightly more women than men in hospitals, a difference of around 5%.
 
 ```{r}
 # Plot the distribution of gender
@@ -564,6 +633,8 @@ patients %>%
 
 When exploring the variable anchor_age, there is a lot of 0s. It is hard to believe that those are true zeroes, most likely they are due to coding errors or missing values registered as 0. So in the analysis below I am filtering out those cases.
 
+The resulting distribution of age is bimodal, with most cases in the early 20s, and then a second peak in the mid 50s. As expected, there is a long right tail of older ages.
+
 ```{r}
 # First, create the histogram
 age_hist <- patients %>%
@@ -574,7 +645,7 @@ age_hist <- patients %>%
   labs(title = "Distribution of patients age",
        x = "", 
        y = "Number of patients") +
-  scale_x_continuous(breaks=seq(30, 100, by = 5)) +
+  scale_x_continuous(breaks=seq(0, 100, by = 5)) +
   theme_classic()
 
 # Then, create the boxplot
@@ -616,9 +687,17 @@ rm(patients, age_hist, age_box)
 
 We are interested in the lab measurements of creatinine (50912), potassium (50971), sodium (50983), chloride (50902), bicarbonate (50882), hematocrit (51221), white blood cell count (51301), glucose (50931), magnesium (50960), calcium (50893), and lactate (50813). Find the `itemid`s of these lab measurements from `d_labitems.csv.gz` and retrieve a subset of `labevents.csv.gz` only containing these items.
 
+### Solution
+
 It was difficult to read these files in memory, so I mixed some bash commands with `data.table::fread`, following the examples [here](https://www.infoworld.com/article/3566384/5-handy-options-in-r-datatables-fread.html) and [here](https://www.r-bloggers.com/2019/06/how-data-tables-fread-can-save-you-a-lot-of-time-and-memory-and-take-input-from-shell-commands/). I saved a subset of the data as `labevents_subset.csv`, so the I can read directly the smaller file.
 
-I would like to notice two things. First, I was able to run the code below both within a Rmarkdown chunk and also directly in the R console. The time difference was *huge*, with the R session being multiple times faster (around 6 minutes versus an hour). Second, I know there is a line in the code that contains more than 80 characters (82 to be precise), but I couldn't get the code to work if I break lineas in the regular expression I am matching. I apologize!
+I would like to notice three things: 
+
+First, I was able to run the code below both within a Rmarkdown chunk and also directly in the R console. The time difference was *huge*, with the R session being multiple times faster (around 6 minutes versus an hour). 
+
+Second, the filtering I did in the code below is not strict, because it is matching the regular expression for each lab code *in the entire row*. Therefore, if there is a match in a different column (other than itemid), that is still in the dataset. So one has to open the data and filter strictly using the `itemid` column.
+
+Finally, I know there is a line in the code that contains more than 80 characters (82 to be precise), but I couldn't get the code to work if I break lines in the regular expression I am matching. I apologize!
 
 ```{r, eval = FALSE}
 # First, store variable names
@@ -648,6 +727,30 @@ Sys.time() - t0
 # Time difference of 6.231131 mins
 ```
 
+To avoid repeating the waiting time, here I will print the smaller version of the dataset posted by professor Zhou.
+
+```{r}
+# Save path for smaller data
+derived_path <- "/usr/203b-data/mimic-iv-derived-data/"
+# Read the smaller data
+labevents_short <- 
+  fread(paste0(derived_path, "labevents_filtered_itemid.csv.gz"),
+        nThread = 4)
+
+# Add colnames
+# Create a vector of names
+# Taken from the original code that created the short file
+col_names <- 
+  c("subject_id", "hadm_id", "itemid", "charttime", "valuenum")
+# Assign to the data.frame
+names(labevents_short) <- col_names
+
+# Print the results
+labevents_short %>%
+  as_tibble() %>%
+  print(width = Inf)
+```
+
 
 ## Q7. Vitals from chartered events
 
@@ -657,12 +760,25 @@ We are interested in the vitals for ICU patients: heart rate, mean and systolic 
 
 `d_items.csv.gz` (<https://mimic-iv.mit.edu/docs/datasets/icu/d_items/>) is the dictionary for the `itemid` in `chartevents.csv.gz`. 
 
-```{r, eval=FALSE}
+```{r}
 # First, let's read the data
 dchartitems <- 
-  read_csv(paste0(mimic_path,"/icu/d_items.csv.gz"))
-names(dchartitems)
+  fread(paste0(mimic_path,"/icu/d_items.csv.gz")) %>% 
+  as_tibble()
+# class(dchartitems$itemid) # Integer
+print(dchartitems, width = Inf)
 ```
+
+Now, let's select the items of interest:
+
+```{r, eval=FALSE}
+labitems <- "Creatinine"
+creatinine_items <- tibble %>%
+  filter(str_detect(label, regex(labitems, ignore_case = TRUE))) %>%
+  print()
+```
+
+
 ```{r, eval=FALSE}
 # Arterial: invasive
 # Non Invasive: well, non invasive
@@ -698,9 +814,19 @@ and columns contain at least following variables
 - an indicator variable whether the patient died within 30 days of hospital admission  
 
 ```{r, eval=FALSE}
-# Load the data
-# 49,971 rows in this data
+# First, let's load and filter the admissions data
+icu_first <- 
+  fread(paste0(mimic_path,"/icu/icustays.csv.gz"))
+  admissions %>%
+  # Format as date, then numeric
+  # The second step is not necessary
+  # But is faster than work on dates
+  mutate(admit = as.numeric(as_date(admittime))) %>%
+  group_by(subject_id) %>%
+  # Select the first date
+  # Break ties keeping the first appearance
+  slice_min(admit, with_ties = FALSE) %>%
+  ungroup()
 
-# Merge the patient data
 ```
 
