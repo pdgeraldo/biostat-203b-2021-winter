@@ -200,7 +200,7 @@ icustays %>%
   theme_bw() +
   theme(axis.text.x = element_blank(),
         axis.ticks.x = element_blank())
-````
+```
 
 ```{r, echo = FALSE}
 rm(icustays, stay_box, stay_hist)
