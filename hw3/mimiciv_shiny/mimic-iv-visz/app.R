@@ -21,7 +21,8 @@ ui <- dashboardPage(
     sidebarMenu(
       menuItem("Demographics", tabName = "Demog"),
       menuItem("Laboratory", tabName = "Labs"),
-      menuItem("Vital Charts", tabName = "Charts")
+      menuItem("Vital Charts", tabName = "Charts"),
+      menuItem("Cross by", tabName = "Cross")
     )
   ),
   
@@ -51,6 +52,14 @@ ui <- dashboardPage(
                                 )) # Close selectInput
 
                 ), # Close box for selectInput
+                
+                box(#title = "Missing entries:", 
+                  width = NULL, 
+                  status = "primary",
+                  solidHeader = TRUE,
+                  #background = "light-blue",
+                  "Complete observations:",
+                  textOutput("drows")),
                 
                 box(#title = "Missing entries:", 
                     width = NULL, 
@@ -90,20 +99,35 @@ ui <- dashboardPage(
                                             "lactate")) # Close selectInput
                 ), # Close box selectInput
                 
+                box(#title = "Missing entries:", 
+                  width = NULL, 
+                  solidHeader = TRUE,
+                  status = "primary", # line in box
+                  #background = "light-blue",
+                  "Complete observations:",
+                  textOutput("lrows")),
+                
                 box(#title = "Missing Data", 
                     width = NULL, 
                     background = "maroon",
                     "Missing entries:",
                     textOutput("lnas")),
                 
-                box(title = "Remove outliers?",
+                box(#title = "Remove outliers?",
                     width = NULL,
                     solidHeader = TRUE,
                     status = "primary",
                     #background = "light-blue",
+                    "Remove ouliers?",
                     checkboxInput("lrmna",
                                   "Yes, please!",
-                                  FALSE))
+                                  FALSE)),
+                
+                box(#title = "Missing Data", 
+                  width = NULL, 
+                  background = "maroon",
+                  "Outliers removed:",
+                  textOutput("loutliers"))
                 ), # Close column
                 
                 #Box for plotOutput
@@ -137,6 +161,14 @@ ui <- dashboardPage(
                                 )) # Close selectInput
                 ), # Close box selectInput
                 
+                box(#title = "Missing entries:", 
+                  width = NULL, 
+                  status = "primary",
+                  solidHeader = TRUE,
+                  #background = "light-blue",
+                  "Complete observations:",
+                  textOutput("crows")),
+                
                 box(#title = "Missing Data", 
                     width = NULL, 
                     background = "maroon",
@@ -147,9 +179,16 @@ ui <- dashboardPage(
                     solidHeader = TRUE,
                     status = "primary",
                     #background = "light-blue",
+                    "Remove outliers?",
                     checkboxInput("crmna",
-                                  "Remove outliers?",
-                                  FALSE))
+                                  "Yes, please!",
+                                  FALSE)),
+                
+                box(#title = "Missing Data", 
+                  width = NULL, 
+                  background = "maroon",
+                  "Outliers removed:",
+                  textOutput("coutliers"))
                 ), # Close column
                 
                 #Box for plotOutput
@@ -157,7 +196,74 @@ ui <- dashboardPage(
                     width = 8,
                     plotOutput("chartplot"))
               ) # Close fluidRow
-      ) # Close tabItem: Vitals
+      ), # Close tabItem: Vitals
+      
+      
+      ### EXPERIMENTAL
+      
+      # Fourth tab: Crossing variables
+      tabItem(tabName = "Cross",
+              fluidRow(
+                # Create first column
+                column(width = 4,
+                       # Box for selectInput
+                       box(#title = "LALALA",
+                           solidHeader = TRUE,
+                           status = "primary",
+                           width = NULL,
+                           #background = "light-blue",
+                           selectInput(inputId = "var",
+                                       label = "Select measure of interest:",
+                                       choices = c("anchor_age",
+                                                   "bicarbonate","calcium",
+                                                   "chloride","creatinine",
+                                                   "glucose","magnesium",
+                                                   "potassium","sodium",
+                                                   "hematocrit","wbc",
+                                                   "lactate", "heart_rate",
+                                                   "non_invasive_blood_pressure_systolic",
+                                                   "non_invasive_blood_pressure_mean",
+                                                   "respiratory_rate",
+                                                   "temperature_fahrenheit"
+                                       )) # Close selectInput
+                       ), # Close box selectInput
+                       
+                       box(#title = "Input selection",
+                           solidHeader = TRUE,
+                           status = "primary",
+                           width = NULL,
+                           #background = "light-blue",
+                           selectInput(inputId = "gvar",
+                                       label = "Select grouping variable:",
+                                       choices = c("gender",
+                                                   "insurance",
+                                                   "language",
+                                                   "ethnicity"
+                                       ))), # Close selectInput
+                       
+                       box(width = NULL,
+                           solidHeader = TRUE,
+                           status = "primary",
+                           #background = "light-blue",
+                           "Remove outliers?",
+                           checkboxInput("rmna",
+                                         "Yes, please!",
+                                         FALSE))
+                       
+                ), # Close column
+                
+                #Box for plotOutput
+                box(title = "Distribution by Group",
+                    width = 8,
+                    plotOutput("crossplot"))
+              ) # Close fluidRow
+      ) # Close tabItem: Cross
+      
+      #### EXPERIMENTAL
+      
+      
+      
+      
       
     ) # Close tabItems
     
@@ -174,9 +280,12 @@ server <- function(input, output) {
   ## ---- DEMOGRAPHICS ---- ##
   # Reactive data for Demographics
   
-  # NA count
+  # observations and NA count
   output$dnas <- reactive({
     nrow(mimic[is.na(mimic[[input$dvar]]),])
+  })
+  output$drows <- reactive({
+    nrow(mimic[!is.na(mimic[[input$dvar]]),])
   })
   
   # Data for plotting
@@ -217,10 +326,19 @@ server <- function(input, output) {
   ## ---- LABORATORY ---- ##
   # Reactive data for Labs
   
-  # NA count
+  # Observations and NA count
   output$lnas <- reactive({
     nrow(mimic[is.na(mimic[[input$lvar]]),])
   })
+  output$lrows <- reactive({
+    nrow(mimic[!is.na(mimic[[input$lvar]]),])
+  })
+  # Outliers count
+  output$loutliers <- reactive({
+    nrow(mimic[!is.na(mimic[[input$lvar]]),]) - nrow(ldata())
+  })
+  
+  
   # Data for plotting
   ldata <- reactive({
     
@@ -258,9 +376,16 @@ server <- function(input, output) {
   ## ---- CHART EVENTS ---- ##
   # Reactive data for Charts
   
-  # NA count
+  # Observations and NA count
   output$cnas <- reactive({
     nrow(mimic[is.na(mimic[[input$cvar]]),])
+  })
+  output$crows <- reactive({
+    nrow(mimic[!is.na(mimic[[input$cvar]]),])
+  })
+  # Outliers count
+  output$coutliers <- reactive({
+    nrow(mimic[!is.na(mimic[[input$cvar]]),]) - nrow(cdata())
   })
   
   # Data for plotting
@@ -283,7 +408,6 @@ server <- function(input, output) {
         tidyr::drop_na(!!!input$cvar) %>%
         dplyr::select(!!!input$cvar)
     }
-    
   })
   
   # Creating chartplot
@@ -296,8 +420,49 @@ server <- function(input, output) {
             axis.ticks.x = element_blank()) +
       labs(y = input$cvar)
   )
+  
+  
+  ## --- CROSS BY --- ###
+  # Data for plotting
+  gdata <- reactive({
     
-}
+    if(input$rmna==TRUE){
+      
+      m <- mimic %>%
+        tidyr::drop_na(!!!input$var) %>%
+        dplyr::select(!!!input$var,
+                      !!!input$gvar)
+      m$sd <- sd(m[[input$var]])
+      m$center <- median(m[[input$var]])
+      m <- m[m[[input$var]] < m$center+3*m$sd, ]
+      m <- m[m[[input$var]] > m$center-3*m$sd, ]
+      return(m)
+      
+    }else{
+      
+      mimic %>%
+        tidyr::drop_na(!!!input$var) %>%
+        dplyr::select(!!!input$var,
+                      !!!input$gvar)
+    }
+  })
+  
+  # Creating crossplot
+  output$crossplot <- renderPlot(
+    ggplot(data = gdata(), 
+           aes(y = gdata()[[input$var]],
+               x = gdata()[[input$gvar]],
+               fill = gdata()[[input$gvar]])) +
+      geom_boxplot(aes(fill = gdata()[[input$gvar]])) +
+      theme_bw() +
+      labs(y = input$var) +
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            legend.title = element_blank())
+  )
+  
+    
+} # End server
 
 # Run the application 
 shinyApp(ui = ui, server = server)
