@@ -52,10 +52,11 @@ ui <- dashboardPage(
 
                 ), # Close box for selectInput
                 
-                box(title = "Missing Data", 
+                box(#title = "Missing entries:", 
                     width = NULL, 
                     background = "maroon",
-                    "A box with a solid maroon background")
+                    "Missing entries:",
+                    textOutput("dnas"))
                 
                 ), # Close column
                 
@@ -71,22 +72,44 @@ ui <- dashboardPage(
       # Second tab: Labs
       tabItem(tabName = "Labs",
               fluidRow(
+                # Create first column
+                column(width = 4,
                 # Box for selectInput
                 box(title = "Input selection",
                     solidHeader = TRUE,
-                    width = 4,
-                    background = "light-blue",
+                    status = "primary",
+                    width = NULL,
+                    #background = "light-blue",
                     selectInput(inputId = "lvar",
                                 label = "Select lab measure:",
                                 choices = c("bicarbonate","calcium",
-                                            "chrloride","createnine",
+                                            "chloride","creatinine",
                                             "glucose","magnesium",
                                             "potassium","sodium",
                                             "hematocrit","wbc",
                                             "lactate")) # Close selectInput
                 ), # Close box selectInput
+                
+                box(#title = "Missing Data", 
+                    width = NULL, 
+                    background = "maroon",
+                    "Missing entries:",
+                    textOutput("lnas")),
+                
+                box(title = "Remove outliers?",
+                    width = NULL,
+                    solidHeader = TRUE,
+                    status = "primary",
+                    #background = "light-blue",
+                    checkboxInput("lrmna",
+                                  "Yes, please!",
+                                  FALSE))
+                ), # Close column
+                
                 #Box for plotOutput
                 box(title = "Variable Distribution",
+                    solidHeader = TRUE,
+                    status = "primary",
                     width = 8,
                     plotOutput("labplot"))
               ) # Close fluidRow
@@ -95,11 +118,14 @@ ui <- dashboardPage(
       # Third tab: Vitals
       tabItem(tabName = "Charts",
               fluidRow(
+                # Create first column
+                column(width = 4,
                 # Box for selectInput
                 box(title = "Input selection",
                     solidHeader = TRUE,
-                    width = 4,
-                    background = "light-blue",
+                    status = "primary",
+                    width = NULL,
+                    #background = "light-blue",
                     selectInput(inputId = "cvar",
                                 label = "Select vitals measure:",
                                 choices = c("heart_rate",
@@ -110,6 +136,22 @@ ui <- dashboardPage(
                                             
                                 )) # Close selectInput
                 ), # Close box selectInput
+                
+                box(#title = "Missing Data", 
+                    width = NULL, 
+                    background = "maroon",
+                    "Missing entries:",
+                    textOutput("cnas")),
+                
+                box(width = NULL,
+                    solidHeader = TRUE,
+                    status = "primary",
+                    #background = "light-blue",
+                    checkboxInput("crmna",
+                                  "Remove outliers?",
+                                  FALSE))
+                ), # Close column
+                
                 #Box for plotOutput
                 box(title = "Variable Distribution",
                     width = 8,
@@ -131,47 +173,117 @@ server <- function(input, output) {
   
   ## ---- DEMOGRAPHICS ---- ##
   # Reactive data for Demographics
-  dnas <- reactive({
-    mimic %>% 
-      dplyr:summarise(n = is.na(!!!input$dvar))
+  
+  # NA count
+  output$dnas <- reactive({
+    nrow(mimic[is.na(mimic[[input$dvar]]),])
   })
   
+  # Data for plotting
   ddata <- reactive({
-    mimic %>%
-      tidyr::drop_na(!!!input$dvar) %>%
-      dplyr::select(!!!input$dvar)
+    
+      mimic %>%
+        tidyr::drop_na(!!!input$dvar) %>%
+        dplyr::select(!!!input$dvar)
   })
   
   # Creating demplot
   output$demplot <- renderPlot(
     
-    ggplot(data = ddata(), 
-           aes(x = ddata()[[input$dvar]], 
-               y = (..count..)/sum(..count..))) +
-      geom_bar(aes(fill = ddata()[[input$dvar]])) +
-      theme_bw() +
-      scale_y_continuous(breaks = seq(0, 1, by = 0.1),
-                         labels = scales::percent) +
-      theme(axis.text.x = element_blank(),
-            axis.ticks.x = element_blank())
+    if(input$dvar == "anchor_age"){
+      ggplot(data = ddata(),
+             aes(x = ddata()[[input$dvar]])) +
+        geom_histogram() +
+        theme_bw() +
+        labs(x = input$dvar,
+             y = "Counts")
+    } else {
+      ggplot(data = ddata(), 
+             aes(x = ddata()[[input$dvar]], 
+                 y = (..count..)/sum(..count..))) +
+        geom_bar(aes(fill = ddata()[[input$dvar]])) +
+        theme_bw() +
+        scale_y_continuous(breaks = seq(0, 1, by = 0.1),
+                           labels = scales::percent) +
+        theme(axis.text.x = element_blank(),
+              axis.ticks.x = element_blank(),
+              legend.title = element_blank()) +
+        labs(x = input$dvar,
+             y = "Percentage")
+    }
+    
   )
   
-  # Creating labplot
-  output$labplot <- renderPlot(
-    hist(rnorm(100, 25, 5))
-  )
+  ## ---- LABORATORY ---- ##
+  # Reactive data for Labs
   
-  ## ---- CHART EVENTS ---- ##
-  # Reactive data for vitals
-  cnas <- reactive({
-    mimic %>% 
-      dplyr:summarise(n = is.na(!!!input$cvar))
+  # NA count
+  output$lnas <- reactive({
+    nrow(mimic[is.na(mimic[[input$lvar]]),])
+  })
+  # Data for plotting
+  ldata <- reactive({
+    
+    if(input$lrmna==TRUE){
+      
+      m <- mimic %>%
+        tidyr::drop_na(!!!input$lvar) %>%
+        dplyr::select(!!!input$lvar)
+      m$sd <- sd(m[[input$lvar]])
+      m$center <- median(m[[input$lvar]])
+      m <- m[m[[input$lvar]] < m$center+3*m$sd, ]
+      m <- m[m[[input$lvar]] > m$center-3*m$sd, ]
+      return(m)
+      
+    }else{
+      
+      mimic %>%
+        tidyr::drop_na(!!!input$lvar) %>%
+        dplyr::select(!!!input$lvar)
+    }
   })
   
+  # Creating labsplot
+  output$labplot <- renderPlot(
+    ggplot(data = ldata(), 
+           aes(y = ldata()[[input$lvar]])) +
+      geom_boxplot() +
+      theme_bw() +
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank()) +
+      labs(y = input$cvar)
+  )
+  
+  
+  ## ---- CHART EVENTS ---- ##
+  # Reactive data for Charts
+  
+  # NA count
+  output$cnas <- reactive({
+    nrow(mimic[is.na(mimic[[input$cvar]]),])
+  })
+  
+  # Data for plotting
   cdata <- reactive({
-    mimic %>%
-      tidyr::drop_na(!!!input$cvar) %>%
-      dplyr::select(!!!input$cvar)
+    
+    if(input$crmna==TRUE){
+    
+      m <- mimic %>%
+        tidyr::drop_na(!!!input$cvar) %>%
+        dplyr::select(!!!input$cvar)
+      m$sd <- sd(m[[input$cvar]])
+      m$center <- median(m[[input$cvar]])
+      m <- m[m[[input$cvar]] < m$center+3*m$sd, ]
+      m <- m[m[[input$cvar]] > m$center-3*m$sd, ]
+      return(m)
+      
+    }else{
+      
+      mimic %>%
+        tidyr::drop_na(!!!input$cvar) %>%
+        dplyr::select(!!!input$cvar)
+    }
+    
   })
   
   # Creating chartplot
@@ -179,7 +291,10 @@ server <- function(input, output) {
     ggplot(data = cdata(), 
            aes(y = cdata()[[input$cvar]])) +
       geom_boxplot() +
-      theme_bw() 
+      theme_bw() +
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank()) +
+      labs(y = input$cvar)
   )
     
 }
