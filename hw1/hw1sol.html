@@ -399,9 +399,9 @@ summary {
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] compiler_3.6.0  magrittr_2.0.1  tools_3.6.0     htmltools_0.5.0
-##  [5] yaml_2.2.1      stringi_1.5.3   rmarkdown_2.6   knitr_1.30     
-##  [9] stringr_1.4.0   xfun_0.19       digest_0.6.27   rlang_0.4.10   
+##  [1] compiler_3.6.0    magrittr_2.0.1    tools_3.6.0       htmltools_0.5.1.1
+##  [5] yaml_2.2.1        stringi_1.5.3     rmarkdown_2.6     knitr_1.30       
+##  [9] stringr_1.4.0     xfun_0.19         digest_0.6.27     rlang_0.4.10     
 ## [13] evaluate_0.14</code></pre>
 <div id="q1.-gitgithub" class="section level2">
 <h2>Q1. Git/GitHub</h2>
@@ -434,7 +434,8 @@ summary {
 <li><a href="https://www.citiprogram.org/verify/?w9dcaffff-1e96-413e-8719-f9feb00bc2b1-40321907">Completion Certificate</a></li>
 </ul>
 <ol start="2" style="list-style-type: decimal">
-<li><p>The <code>/usr/203b-data/mimic-iv/</code> folder on teaching server contains data sets from MIMIC-IV. Refer to <a href="https://mimic-iv.mit.edu/docs/datasets/" class="uri">https://mimic-iv.mit.edu/docs/datasets/</a> for details of data files.</p>
+<li>The <code>/usr/203b-data/mimic-iv/</code> folder on teaching server contains data sets from MIMIC-IV. Refer to <a href="https://mimic-iv.mit.edu/docs/datasets/" class="uri">https://mimic-iv.mit.edu/docs/datasets/</a> for details of data files.</li>
+</ol>
 <pre class="bash"><code>ls -l /usr/203b-data/mimic-iv</code></pre>
 <pre><code>## total 12
 ## drwxr-xr-x. 2 huazhou huazhou   78 Jan 11 02:28 core
@@ -443,8 +444,9 @@ summary {
 ## -rw-r--r--. 1 huazhou huazhou 2518 Jan 11 02:13 LICENSE.txt
 ## -rw-r--r--. 1 huazhou huazhou 2459 Jan 11 02:13 SHA256SUMS.txt</code></pre>
 <p>Please, do <strong>not</strong> put these data files into Git; they are big. Do <strong>not</strong> copy them into your directory. Do <strong>not</strong> decompress the gz data files. These create unnecessary big files on storage and are not big data friendly practices. Just read from the data folder <code>/usr/203b-data/mimic-iv</code> directly in following exercises.</p>
-<p>Use Bash commands to answer following questions.</p></li>
-<li><p>Display the contents in the folders <code>core</code>, <code>hosp</code>, <code>icu</code>. What are the functionalities of the bash commands <code>zcat</code>, <code>zless</code>, <code>zmore</code>, and <code>zgrep</code>?</p></li>
+<pre><code>Use Bash commands to answer following questions.</code></pre>
+<ol start="3" style="list-style-type: decimal">
+<li>Display the contents in the folders <code>core</code>, <code>hosp</code>, <code>icu</code>. What are the functionalities of the bash commands <code>zcat</code>, <code>zless</code>, <code>zmore</code>, and <code>zgrep</code>?</li>
 </ol>
 <p>First, the following code will display the content in the respective directories. I counted 3 files in the <code>core</code> directory, 17 files in the <code>hosp</code> directory, and 7 files in the <code>icu</code> directory.</p>
 <pre class="bash"><code># Display files in the core folder (3 files)
@@ -524,6 +526,40 @@ for datafile in /usr/203b-data/mimic-iv/hosp/*.gz
     echo &quot;The number of lines in $datafile is &quot;
     zcat $datafile | wc -l
   done</code></pre>
+<pre><code>## The number of lines in /usr/203b-data/mimic-iv/hosp/d_hcpcs.csv.gz is 
+## 89201
+## The number of lines in /usr/203b-data/mimic-iv/hosp/diagnoses_icd.csv.gz is 
+## 4677925
+## The number of lines in /usr/203b-data/mimic-iv/hosp/d_icd_diagnoses.csv.gz is 
+## 86752
+## The number of lines in /usr/203b-data/mimic-iv/hosp/d_icd_procedures.csv.gz is 
+## 82764
+## The number of lines in /usr/203b-data/mimic-iv/hosp/d_labitems.csv.gz is 
+## 1626
+## The number of lines in /usr/203b-data/mimic-iv/hosp/drgcodes.csv.gz is 
+## 1168136
+## The number of lines in /usr/203b-data/mimic-iv/hosp/emar.csv.gz is 
+## 27590436
+## The number of lines in /usr/203b-data/mimic-iv/hosp/emar_detail.csv.gz is 
+## 56203138
+## The number of lines in /usr/203b-data/mimic-iv/hosp/hcpcsevents.csv.gz is 
+## 144859
+## The number of lines in /usr/203b-data/mimic-iv/hosp/labevents.csv.gz is 
+## 122289829
+## The number of lines in /usr/203b-data/mimic-iv/hosp/microbiologyevents.csv.gz is 
+## 1026114
+## The number of lines in /usr/203b-data/mimic-iv/hosp/pharmacy.csv.gz is 
+## 14747760
+## The number of lines in /usr/203b-data/mimic-iv/hosp/poe.csv.gz is 
+## 42526845
+## The number of lines in /usr/203b-data/mimic-iv/hosp/poe_detail.csv.gz is 
+## 3259645
+## The number of lines in /usr/203b-data/mimic-iv/hosp/prescriptions.csv.gz is 
+## 17021400
+## The number of lines in /usr/203b-data/mimic-iv/hosp/procedures_icd.csv.gz is 
+## 685415
+## The number of lines in /usr/203b-data/mimic-iv/hosp/services.csv.gz is 
+## 563707</code></pre>
 <p>Finally, for the <code>icu</code> folder:</p>
 <pre class="bash"><code># For the files in the icu folder
 for datafile in /usr/203b-data/mimic-iv/icu/*.gz
@@ -548,18 +584,27 @@ for datafile in /usr/203b-data/mimic-iv/icu/*.gz
 <ol start="5" style="list-style-type: decimal">
 <li>Display the first few lines of <code>admissions.csv.gz</code>. How many rows are in this data file? How many unique patients (identified by <code>subject_id</code>) are in this data file? What are the possible values taken by each of the variable <code>admission_type</code>, <code>admission_location</code>, <code>insurance</code>, <code>language</code>, <code>marital_status</code>, and <code>ethnicity</code>? Also report the count for each unique value of these variables. (Hint: combine Linux commands <code>zcat</code>, <code>head</code>/<code>tail</code>, <code>awk</code>, <code>uniq</code>, <code>wc</code>, and so on.)</li>
 </ol>
-<p>Here, I display the first five lines of the <code>admissions.csv.gz</code> file:</p>
-<pre class="bash"><code># First, display the first 5 lines in the file
-zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | head -n 5</code></pre>
+<p>Here, I display the first fifteen lines of the <code>admissions.csv.gz</code> file:</p>
+<pre class="bash"><code># Display the first 5 lines in the file
+zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | head -n 15</code></pre>
 <pre><code>## subject_id,hadm_id,admittime,dischtime,deathtime,admission_type,admission_location,discharge_location,insurance,language,marital_status,ethnicity,edregtime,edouttime,hospital_expire_flag
 ## 12427812,21593330,2184-01-06 11:51:00,2184-01-10 11:45:00,,URGENT,PHYSICIAN REFERRAL,HOME,Other,ENGLISH,,UNKNOWN,,,0
 ## 14029832,22059088,2120-01-18 01:28:00,2120-01-20 16:13:00,,URGENT,TRANSFER FROM HOSPITAL,HOME,Other,ENGLISH,,OTHER,,,0
 ## 14495017,22484010,2175-01-28 15:41:00,2175-01-29 16:00:00,,DIRECT EMER.,PHYSICIAN REFERRAL,HOME,Other,?,,WHITE,,,0
-## 13676048,23865469,2193-01-19 05:27:00,2193-01-24 18:59:00,,URGENT,PHYSICIAN REFERRAL,HOME,Other,?,MARRIED,WHITE,,,0</code></pre>
+## 13676048,23865469,2193-01-19 05:27:00,2193-01-24 18:59:00,,URGENT,PHYSICIAN REFERRAL,HOME,Other,?,MARRIED,WHITE,,,0
+## 13831972,27763544,2131-01-27 04:03:00,2131-01-27 05:39:00,,EU OBSERVATION,EMERGENCY ROOM,,Medicaid,ENGLISH,SINGLE,WHITE,2131-01-26 22:19:00,2131-01-27 05:39:00,0
+## 18523038,25414328,2142-08-26 17:14:00,2142-08-27 10:00:00,,DIRECT OBSERVATION,PROCEDURE SITE,,Other,ENGLISH,SINGLE,WHITE,,,0
+## 16705931,20580522,2174-10-24 11:30:00,2174-10-24 18:45:00,,DIRECT OBSERVATION,PHYSICIAN REFERRAL,,Other,ENGLISH,MARRIED,WHITE,,,0
+## 19963742,24951506,2171-07-04 15:58:00,2171-07-05 13:37:00,,AMBULATORY OBSERVATION,PACU,,Other,ENGLISH,SINGLE,UNKNOWN,,,0
+## 10903424,22568585,2181-01-31 13:09:00,2181-01-31 13:42:00,,EU OBSERVATION,EMERGENCY ROOM,,Other,ENGLISH,SINGLE,WHITE,,,0
+## 15030422,21975876,2149-09-21 23:54:00,2149-09-22 03:59:00,,EU OBSERVATION,EMERGENCY ROOM,,Other,ENGLISH,SINGLE,WHITE,,,0
+## 19288517,24130407,2166-11-16 08:28:00,2166-11-16 16:45:00,,EU OBSERVATION,EMERGENCY ROOM,,Other,ENGLISH,MARRIED,WHITE,2166-11-16 05:00:00,2166-11-16 16:45:00,0
+## 12003385,23167764,2197-12-11 23:35:00,2197-12-12 11:26:00,,EU OBSERVATION,EMERGENCY ROOM,,Other,ENGLISH,MARRIED,WHITE,2197-12-11 15:19:00,2197-12-12 11:26:00,0
+## 14402927,23499598,2131-06-14 18:10:00,2131-06-15 18:55:00,,AMBULATORY OBSERVATION,PACU,,Medicare,ENGLISH,MARRIED,WHITE,,,0
+## 19416335,26414593,2169-07-13 22:29:00,2169-07-15 17:57:00,,EU OBSERVATION,PHYSICIAN REFERRAL,,Other,ENGLISH,MARRIED,WHITE,2169-07-13 14:24:00,2169-07-14 01:16:00,0</code></pre>
 <p>Now, I count the number of rows in the data. I’m starting the count in line 2 to skip the header, so it will be the number of cases. The total number of rows including the header will be the same +1 (see <strong>Q2.4</strong> above):</p>
-<pre class="bash"><code># Second, count the rows in the data file (following the example above)
+<pre class="bash"><code># Count the rows in the data file (following the example above)
 # using tail +2 to skip the first line (header)
-# 
 echo &quot;The number of rows in the data is &quot;
 zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | wc -l</code></pre>
 <pre><code>## The number of rows in the data is 
@@ -577,6 +622,79 @@ echo &quot;The number of unique patients in the file is &quot;
 zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | awk -F, &#39;{print $1}&#39; | sort | uniq -c | wc -l</code></pre>
 <pre><code>## The number of unique patients in the file is 
 ## 257366</code></pre>
+<p>What are the possible values taken by each of the variable <code>admission_type</code>, <code>admission_location</code>, <code>insurance</code>, <code>language</code>, <code>marital_status</code>, and <code>ethnicity</code>? Also report the count for each unique value of these variables. (Hint: combine Linux commands <code>zcat</code>, <code>head</code>/<code>tail</code>, <code>awk</code>, <code>uniq</code>, <code>wc</code>, and so on.)</p>
+<p>Now, let’s identify the possible values for each of the listed variables:</p>
+<pre class="bash"><code># Looping over column numbers
+# corresponding to the variables of interest
+
+# First, create a data variable to keep code short
+data=&#39;/usr/203b-data/mimic-iv/core/admissions.csv.gz&#39;
+
+# No loop version would be this:
+# zcat $data | head -n 1 | awk -F, &#39;{print $6}&#39;
+# zcat $data | tail -n +2 | awk -F, &#39;{print $6}&#39; | sort | uniq -c
+# awk need to distinguish between the internal $ and the loop $
+# this is the option -v below
+
+# Then loop over variables
+# the awk command requires the -v
+for i in 6 7 9 10 11 12
+  do
+    echo &quot;Unique values and counts in variable in&quot;
+    zcat $data | head -n 1 | awk -v i=&quot;$i&quot; -F, &#39;{print $i}&#39;
+    zcat $data | tail -n +2 | awk -v i=&quot;$i&quot; -F, &#39;{print $i}&#39; | sort | uniq -c
+  done</code></pre>
+<pre><code>## Unique values and counts in variable in
+## admission_type
+##    7259 AMBULATORY OBSERVATION
+##   21595 DIRECT EMER.
+##   20014 DIRECT OBSERVATION
+##   72077 ELECTIVE
+##  100938 EU OBSERVATION
+##  158032 EW EMER.
+##   55532 OBSERVATION ADMIT
+##   41103 SURGICAL SAME DAY ADMISSION
+##   47970 URGENT
+## Unique values and counts in variable in
+## admission_location
+##   60437 
+##     191 AMBULATORY SURGERY TRANSFER
+##   10678 CLINIC REFERRAL
+##  246241 EMERGENCY ROOM
+##     379 INFORMATION NOT AVAILABLE
+##    4484 INTERNAL TRANSFER TO OR FROM PSYCH
+##    6075 PACU
+##  127648 PHYSICIAN REFERRAL
+##    8453 PROCEDURE SITE
+##   39150 TRANSFER FROM HOSPITAL
+##    4069 TRANSFER FROM SKILLED NURSING FACILITY
+##   16715 WALK-IN/SELF REFERRAL
+## Unique values and counts in variable in
+## insurance
+##   50962 Medicaid
+##  171492 Medicare
+##  302066 Other
+## Unique values and counts in variable in
+## language
+##   46231 ?
+##  478289 ENGLISH
+## Unique values and counts in variable in
+## marital_status
+##   66133 
+##   33762 DIVORCED
+##  195326 MARRIED
+##  180453 SINGLE
+##   48846 WIDOWED
+## Unique values and counts in variable in
+## ethnicity
+##    1536 AMERICAN INDIAN/ALASKA NATIVE
+##   24522 ASIAN
+##   80526 BLACK/AFRICAN AMERICAN
+##   29887 HISPANIC/LATINO
+##   26844 OTHER
+##    3742 UNABLE TO OBTAIN
+##   19419 UNKNOWN
+##  338044 WHITE</code></pre>
 </div>
 <div id="q3.-whos-popular-in-price-and-prejudice" class="section level2">
 <h2>Q3. Who’s popular in Price and Prejudice</h2>
@@ -589,8 +707,8 @@ curl http://www.gutenberg.org/cache/epub/42671/pg42671.txt &gt; pride_and_prejud
 ##                                  Dload  Upload   Total   Spent    Left  Speed
 ## 
   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
-  9  708k    9 68705    0     0   100k      0  0:00:07 --:--:--  0:00:07  100k
-100  708k  100  708k    0     0   524k      0  0:00:01  0:00:01 --:--:--  524k</code></pre>
+ 55  708k   55  393k    0     0   383k      0  0:00:01  0:00:01 --:--:--  384k
+100  708k  100  708k    0     0   572k      0  0:00:01  0:00:01 --:--:--  573k</code></pre>
 <p>Do <strong>not</strong> put this text file <code>pride_and_prejudice.txt</code> in Git. Using a <code>for</code> loop, how would you tabulate the number of times each of the four characters is mentioned?</p>
 <pre class="bash"><code>for value in Elizabeth Jane Lydia Darcy
   do
@@ -650,7 +768,7 @@ cal 2021 # Outputs the calendar of the entire year</code></pre>
 ## 24 25 26 27 28 29 30</code></pre>
 <p>The command <code>date</code> prints the current day, date and time in the UTC time zone.</p>
 <pre class="bash"><code>date</code></pre>
-<pre><code>## Fri Jan 22 21:39:26 UTC 2021</code></pre>
+<pre><code>## Wed Mar 17 16:50:46 UTC 2021</code></pre>
 <p>The command <code>hostname</code> prints the name of the server one is working on, in this case, the server for this class.</p>
 <pre class="bash"><code>hostname</code></pre>
 <pre><code>## ucla-biostat-203b</code></pre>
@@ -663,40 +781,34 @@ cal 2021 # Outputs the calendar of the entire year</code></pre>
 <pre><code>## Linux ucla-biostat-203b 3.10.0-1160.6.1.el7.x86_64 #1 SMP Tue Nov 17 13:59:11 UTC 2020 x86_64 x86_64 x86_64 GNU/Linux</code></pre>
 <p>The <code>uptime</code> command display the time that the server has been working, the current time, number of users currently logged in, and the average CPU use over the last 1, 5, and 15 minutes.</p>
 <pre class="bash"><code>uptime</code></pre>
-<pre><code>##  21:39:26 up 18 days, 23:50,  4 users,  load average: 1.05, 0.56, 0.30</code></pre>
+<pre><code>##  16:50:46 up 72 days, 19:01,  1 user,  load average: 8.35, 8.18, 7.49</code></pre>
 <p>The <code>whoami</code> command displays the username of the logged user (in other words, mine)</p>
 <pre class="bash"><code>whoami</code></pre>
 <pre><code>## pdgeraldo</code></pre>
 <p>The <code>who</code> command list all the users that are currently logged in.</p>
 <pre class="bash"><code>who</code></pre>
-<pre><code>## tibbe1td pts/5        2021-01-22 21:15 (047-026-247-123.res.spectrum.com)
-## filipovicmilan271 pts/7        2021-01-21 06:03 (110.3.236.35.bc.googleusercontent.com)
-## jtan.smeltzer pts/10       2021-01-22 20:37 (cpe-172-115-102-86.socal.res.rr.com)
-## jyixzhou pts/12       2021-01-22 20:56 (cpe84948c862443-cm84948c862440.cpe.net.fido.ca)</code></pre>
+<pre><code>## filipovicmilan271 pts/7        2021-01-21 06:03 (110.3.236.35.bc.googleusercontent.com)</code></pre>
 <p>Similarly, <code>w</code> command list all the active users but with more details, indicating where are the connected from and what they are doing.</p>
 <pre class="bash"><code>w</code></pre>
-<pre><code>##  21:39:26 up 18 days, 23:50,  4 users,  load average: 1.05, 0.56, 0.30
+<pre><code>##  16:50:46 up 72 days, 19:01,  1 user,  load average: 8.35, 8.18, 7.49
 ## USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
-## tibbe1td pts/5    047-026-247-123. 21:15   22:06   0.05s  0.01s less -s
-## filipovi pts/7    110.3.236.35.bc. Thu06   39:30m  0.06s  0.06s -bash
-## jtan.sme pts/10   cpe-172-115-102- 20:37   40:06   0.10s  0.10s -bash
-## jyixzhou pts/12   cpe84948c862443- 20:56   32:22   0.06s  0.06s -bash</code></pre>
+## filipovi pts/7    110.3.236.35.bc. 21Jan21 55days  0.06s  0.06s -bash</code></pre>
 <p>The <code>id</code> command prints the (current) user, their group id and memberships, and the security credentials.</p>
 <pre class="bash"><code>id
 # Can also specify id username</code></pre>
 <pre><code>## uid=1011(pdgeraldo) gid=1013(pdgeraldo) groups=1013(pdgeraldo) context=system_u:system_r:initrc_t:s0</code></pre>
 <p>The command <code>last</code> lists the last users logged into the server, and when pipped to <code>head</code> it will list only the last ten (included currently logged users)</p>
 <pre class="bash"><code>last | head</code></pre>
-<pre><code>## tibbe1td pts/5        047-026-247-123. Fri Jan 22 21:15   still logged in   
-## jyixzhou pts/12       cpe84948c862443- Fri Jan 22 20:56   still logged in   
-## jtan.sme pts/10       cpe-172-115-102- Fri Jan 22 20:37   still logged in   
-## yingyanw pts/9        s-164-67-81-105. Fri Jan 22 19:54 - 19:56  (00:01)    
-## zhaofan1 pts/1        cpe-76-91-16-146 Fri Jan 22 19:50 - 21:27  (01:36)    
-## zianzhua pts/8        110.88.97.219    Fri Jan 22 18:22 - 18:25  (00:03)    
-## angelica pts/8        cpe-108-185-43-2 Fri Jan 22 17:54 - 18:16  (00:22)    
-## zhaofan1 pts/1        cpe-76-91-16-146 Fri Jan 22 17:05 - 19:50  (02:45)    
-## angelica pts/11       ucla-biostat-203 Fri Jan 22 06:59 - 07:15  (00:16)    
-## zhaofan1 pts/8        cpe-76-91-16-146 Fri Jan 22 06:40 - 07:01  (00:21)</code></pre>
+<pre><code>## haoyunj  pts/0        101.88.78.6      Wed Mar 17 05:13 - 05:38  (00:25)    
+## haoyunj  pts/0        101.88.78.6      Wed Mar 17 04:24 - 04:53  (00:29)    
+## haoyunj  pts/0        101.88.78.6      Wed Mar 17 04:20 - 04:23  (00:03)    
+## haoyunj  pts/0        101.88.78.6      Wed Mar 17 04:15 - 04:18  (00:02)    
+## haoyunj  pts/8        101.88.78.6      Wed Mar 17 03:55 - 04:20  (00:25)    
+## huazhou  pts/4        108-64-58-205.li Wed Mar 17 03:08 - 03:09  (00:01)    
+## haoyunj  pts/0        101.88.78.6      Wed Mar 17 03:06 - 04:05  (00:58)    
+## asburyse pts/2        c-67-171-189-1.h Wed Mar 17 00:23 - 04:34  (04:10)    
+## hunanzho pts/4        47.145.202.194   Tue Mar 16 20:50 - 22:49  (01:58)    
+## hunanzho pts/8        47.145.202.194   Tue Mar 16 18:21 - 18:21  (00:00)</code></pre>
 <p>The command <code>echo</code> prints what the user enters. In this case, it subsequently concatenates what is in the first bracket with the second and the third, creating all combinations.</p>
 <pre class="bash"><code>echo {con,pre}{sent,fer}{s,ed}</code></pre>
 <pre><code>## consents consented confers confered presents presented prefers prefered</code></pre>
@@ -706,9 +818,9 @@ set -o history
 time sleep 5
 history | tail</code></pre>
 <pre><code>## 
-## real 0m5.003s
-## user 0m0.002s
-## sys  0m0.000s
+## real 0m5.013s
+## user 0m0.000s
+## sys  0m0.002s
 ##     1  time sleep 5
 ##     2  history | tail</code></pre>
 </div>
