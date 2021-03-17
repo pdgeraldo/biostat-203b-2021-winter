@@ -44,9 +44,9 @@ Here are my credentials from having completed the training at CITI:
 * [Completion Certificate](https://www.citiprogram.org/verify/?w9dcaffff-1e96-413e-8719-f9feb00bc2b1-40321907)
 
 2. The `/usr/203b-data/mimic-iv/` folder on teaching server contains data sets from MIMIC-IV. Refer to <https://mimic-iv.mit.edu/docs/datasets/> for details of data files.  
-    ```{bash}
-    ls -l /usr/203b-data/mimic-iv
-    ```
+```{bash}
+ls -l /usr/203b-data/mimic-iv
+```
 Please, do **not** put these data files into Git; they are big. Do **not** copy them into your directory. Do **not** decompress the gz data files. These create unnecessary big files on storage and are not big data friendly practices. Just read from the data folder `/usr/203b-data/mimic-iv` directly in following exercises. 
 
     Use Bash commands to answer following questions.
@@ -105,7 +105,7 @@ for datafile in /usr/203b-data/mimic-iv/core/*.gz
 ```
 Now, let's consider the `hosp` directory:
 
-```{bash, eval=FALSE}
+```{bash, eval=TRUE}
 # For the files in the hosp folder (takes some time to run)
 for datafile in /usr/203b-data/mimic-iv/hosp/*.gz
   do
@@ -127,19 +127,18 @@ for datafile in /usr/203b-data/mimic-iv/icu/*.gz
 
 5. Display the first few lines of `admissions.csv.gz`. How many rows are in this data file? How many unique patients (identified by `subject_id`) are in this data file? What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, `language`, `marital_status`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq`, `wc`, and so on.)
 
-Here, I display the first five lines of the `admissions.csv.gz` file:
+Here, I display the first fifteen lines of the `admissions.csv.gz` file:
 
 ```{bash}
-# First, display the first 5 lines in the file
-zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | head -n 5
+# Display the first 5 lines in the file
+zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | head -n 15
 ```
 
 Now, I count the number of rows in the data. I'm starting the count in line 2 to skip the header, so it will be the number of cases. The total number of rows including the header will be the same +1 (see **Q2.4** above): 
 
 ```{bash}
-# Second, count the rows in the data file (following the example above)
+# Count the rows in the data file (following the example above)
 # using tail +2 to skip the first line (header)
-# 
 echo "The number of rows in the data is "
 zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | wc -l
 ```
@@ -157,6 +156,33 @@ Now, to identify unique patients, I use the code below:
 
 echo "The number of unique patients in the file is "
 zcat /usr/203b-data/mimic-iv/core/admissions.csv.gz | tail -n +2 | awk -F, '{print $1}' | sort | uniq -c | wc -l
+```
+
+What are the possible values taken by each of the variable `admission_type`, `admission_location`, `insurance`, `language`, `marital_status`, and `ethnicity`? Also report the count for each unique value of these variables. (Hint: combine Linux commands `zcat`, `head`/`tail`, `awk`, `uniq`, `wc`, and so on.)
+
+Now, let's identify the possible values for each of the listed variables:
+
+```{bash}
+# Looping over column numbers
+# corresponding to the variables of interest
+
+# First, create a data variable to keep code short
+data='/usr/203b-data/mimic-iv/core/admissions.csv.gz'
+
+# No loop version would be this:
+# zcat $data | head -n 1 | awk -F, '{print $6}'
+# zcat $data | tail -n +2 | awk -F, '{print $6}' | sort | uniq -c
+# awk need to distinguish between the internal $ and the loop $
+# this is the option -v below
+
+# Then loop over variables
+# the awk command requires the -v
+for i in 6 7 9 10 11 12
+  do
+    echo "Unique values and counts in variable in"
+    zcat $data | head -n 1 | awk -v i="$i" -F, '{print $i}'
+    zcat $data | tail -n +2 | awk -v i="$i" -F, '{print $i}' | sort | uniq -c
+  done
 ```
 
 ## Q3. Who's popular in Price and Prejudice
