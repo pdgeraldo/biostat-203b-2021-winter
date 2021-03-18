@@ -879,7 +879,11 @@ icu_first <-
   mutate(age_admission = 
            year(admittime) - anchor_year + anchor_age) %>%
   # Keep only adults (>=18) at admissions
-  filter(age_admission >= 18)
+  filter(age_admission >= 18) %>%
+  mutate(admitdate = date(admittime),
+         deathdate = as_date(deathtime),
+         diein = as.numeric(deathdate - admitdate),
+         die30 = diein <= 30)
 
 # Delete auxiliary data to save memory
 rm(admissions, patients)
