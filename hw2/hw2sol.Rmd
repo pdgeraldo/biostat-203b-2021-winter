@@ -15,7 +15,7 @@ sessionInfo()
 ```
 
 ```{r setup}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE, cache.lazy = FALSE)
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE, cache.lazy = FALSE)
 library(tidyverse)
 library(data.table)
 library(lubridate)
@@ -61,28 +61,22 @@ In this homework, we stick to the tidyverse or data.table.
 
 Let's figure out the reading times for the `admissions` file. We will use the `system.time` function to measure how long does it takes for each function to run. To avoid repeating the waiting time when knitting, I am commenting out the functions and pasting the output from each run.
 
-As we can see, the base R function `read.csv` is the slowest one, taking around 46 second to read the data. The tidyverse-based function `read_csv` greatly improves upon the base R version, reading the data in 4.5 second. Finally, `data.table::fread` further improves completing the task in only 2.7 seconds. One would expect the difference to be even more substantial for bigger datasets.
+As we can see, the base R function `read.csv` is the slowest one, taking substantially longer to read the data. The tidyverse-based function `read_csv` greatly improves upon the base R version, reading the data around ten times faster. Finally, `data.table::fread` further improves completing the task in around fice seconds. One would expect the difference to be even more substantial for bigger datasets.
 
-**Note**: I tried this several times and of course there is a lot of variation, depending on the load of the server's memory. There are cases in which the base r version takes substantively longer, and cases in which dplyr and data.table are not that different. So this is not a formal benchmarking.
+**Note**: I tried this several times and of course there is a lot of variation, depending on the load of the server's memory. There are cases in which the base r version takes even longer, and cases in which `read_csv` and `fread` are not that different. So this is not a formal benchmarking.
 
-```{r, eval=FALSE, cache=TRUE}
+```{r, cache=TRUE}
 # First, use the native read.csv
 read.csv(paste0(mimic_path,"/core/admissions.csv.gz")) %>%
   system.time()
-#   user  system elapsed 
-# 46.386   0.002  46.428 
 
 # Second, use tidyverse read_csv
 read_csv(paste0(mimic_path,"/core/admissions.csv.gz")) %>%
   system.time()
-#   user  system elapsed 
-#  4.563   0.000   4.654 
 
 # Finally, use data.table fread function
 fread(paste0(mimic_path,"/core/admissions.csv.gz")) %>%
   system.time()
-#   user  system elapsed 
-#  2.728   0.000   1.708
 ```
 
 
@@ -203,7 +197,7 @@ icustays %>%
 ```
 
 ```{r, echo = FALSE}
-rm(icustays, stay_box, stay_hist)
+rm(stay_box, stay_hist)
 ```
 
 
@@ -733,7 +727,7 @@ Sys.time() - t0
 # Time difference of 6.231131 mins
 ```
 
-To avoid repeating the waiting time, here I will print the smaller version of the dataset posted by professor Zhou.
+To avoid repeating the waiting time, here I will reprocess and print  the smaller version of the dataset posted by professor Zhou.
 
 ```{r}
 # Save path for smaller data
@@ -741,27 +735,39 @@ derived_path <- "/usr/203b-data/mimic-iv-derived-data/"
 # Read the smaller data
 labevents_short <- 
   fread(paste0(derived_path, "labevents_filtered_itemid.csv.gz"),
-        nThread = 4)
+        nThread = 4,
+        header = FALSE,
+        col.names = c("subject_id", 
+                      "hadm_id", 
+                      "itemid", 
+                      "charttime", 
+                      "valuenum")) %>%
+  as_tibble() %>%
+  # charttime numeric for faster computation
+  mutate(charttime_num = as.numeric(as_date(charttime))) %>%
+  # grouping by subject/hadm/item
+  group_by(subject_id, hadm_id, itemid) %>%
+  slice_min(charttime_num, with_ties = FALSE) %>%
+  pivot_wider(names_from = itemid, values_from = valuenum) 
 
-# Add colnames
-# Create a vector of names
-# Taken from the original code that created the short file
-col_names <- 
-  c("subject_id", "hadm_id", "itemid", "charttime", "valuenum")
-# Assign to the data.frame
-names(labevents_short) <- col_names
-
-# Shorten the results
-# To keep only the ones in icustays
+# Use the dictionary to rename the vars
 labevents_short <-
-  icustays %>%
-  select(subject_id, hadm_id) %>%
-  left_join(labevents_short, by = c("subject_id","hadm_id")) %>%
-  as_tibble()
+  labevents_short %>%
+  rename(creatinine = "50912",
+         potassium = "50971", 
+         sodium = "50983", 
+         chloride = "50902", 
+         bicarbonate = "50882", 
+         hematocrit = "51221", 
+         whiteblood_ccount = "51301", 
+         glucose = "50931", 
+         magnesium = "50960", 
+         calcium = "50893", 
+         lactate = "50813")
+
 
 # Print the results
-labevents_short %>%
-  print(width = Inf)
+print(labevents_short, width = Inf)
 ```
 
 
@@ -777,28 +783,60 @@ We are interested in the vitals for ICU patients: heart rate, mean and systolic 
 
 ### Solution
 
-As in the question above, I had some trouble reading the big files, some I am using the subset of the data posted on the derived data folder.
+As in the question above, I had some trouble reading the big files, some I am using the subset of the data posted on the derived data folder. I took the subset of the data posted (still 30M rows), kept only the first chart result per subject/stay/item, and reshaped to a wider dataset, converting each item into a variable on its own. The resulting dataset is 217,403 rows and 12 observations. Finally, I renamed it the variables (from codes to chart names).
 
 ```{r}
-# Read the smaller data
+# Read the "smaller" data
+# With only the selected items
+# (30,095,996 rows)
+# And reshape it to wider
 vitals_short <- 
   fread(paste0(derived_path, "chartevents_filtered_itemid.csv.gz"),
         header = FALSE,
         col.names = c("subject_id","hadm_id",
                       "stay_id","charttime",
-                      "vitemid","valuenum"),
+                      "itemid","valuenum"),
         nThread = 4) %>%
-  as_tibble()
+  as_tibble() %>%
+  # charttime numeric for faster computation
+  mutate(charttime_num = as.numeric(as_date(charttime))) %>%
+  # group: within subject/stay/item
+  group_by(subject_id, stay_id, itemid) %>%
+  # keep only the first reading by subject/stay/item
+  slice_min(charttime_num, with_ties = FALSE) %>%
+  pivot_wider(names_from = itemid, values_from = valuenum) 
 
-# Shorten the results
-# To keep only the ones in icustays
+# To rename the variables
+# Store the categories included in the data
+# Save them as integers to later use in filter
+codes <- 
+  names(vitals_short)[6:12] %>%
+  as.numeric()
+# Read the dictionary
+dcharts <- 
+  fread(paste0(mimic_path,"/icu/d_items.csv.gz")) %>%
+  select(itemid, label) %>%
+  filter(itemid %in% codes)
+dcharts
+```
+
+```{r}
+# Remove dictionary data
+rm(dcharts)
+
+# Use the dictionary to rename the vars
 vitals_short <-
-  icustays %>%
-  select(subject_id, hadm_id) %>%
-  left_join(vitals_short, by = c("subject_id","hadm_id")) %>%
-  as_tibble()
+  vitals_short %>%
+  rename(heart_rate = "220045",
+         bp_arterial_sys = "220050",
+         bp_arterial_mean = "220052",
+         bp_noninv_sys = "220179",
+         bp_noninv_mean = "220181",
+         resp_rate = "220210",
+         temp_faren = "223761")
 
-print(vitals_short, width = Inf) 
+# Print the results
+print(vitals_short, width = Inf)
 ```
 
 
@@ -847,9 +885,13 @@ icu_first <-
   left_join(admissions, by = c("subject_id","hadm_id")) %>%
   # Calculate age at icu hospitalization
   mutate(age_admission = 
-           year(admittime) - anchor_year + anchor_year) %>%
+           year(admittime) - anchor_year + anchor_age) %>%
   # Keep only adults (>=18) at admissions
-  filter(age_admission >= 18)
+  filter(age_admission >= 18) %>%
+  mutate(admitdate = date(admittime),
+         deathdate = as_date(deathtime),
+         diein = as.numeric(deathdate - admitdate),
+         die30 = diein <= 30)
 
 # Delete auxiliary data to save memory
 rm(admissions, patients)
@@ -863,25 +905,6 @@ Now I will add the labs and vitals measurement:
 
 
 ```{r}
-# Pre-process labevents to keep only relevant data
-labevents_short <-
-  icu_first %>%
-  # inttime numeric for faster computation
-  mutate(intime_num = as.numeric(as_date(intime))) %>%
-  # Select the vars I'll use to filter labevents
-  select(subject_id, hadm_id, intime_num) %>% 
-  # Merge lab data
-  left_join(labevents_short, 
-            by= c("subject_id","hadm_id")) %>%
-  # charttime numeric for faster computation
-  mutate(charttime_num = as.numeric(as_date(charttime))) %>%
-  # drop labs before hospitalization (if any)
-  filter(charttime_num >= intime_num) %>%
-  group_by(subject_id, itemid) %>%
-  slice_min(charttime_num, with_ties = FALSE) %>%
-  select(-intime_num, -charttime, -charttime_num) %>%
-  pivot_wider(names_from = itemid, values_from = valuenum) 
-  
 # Merge all with labevents
 icu_first <-
   icu_first %>%
@@ -890,26 +913,13 @@ icu_first <-
 # Drop auxiliary file to save memory
 rm(labevents_short)
 
-# Pre-process vitals to keep only relevant data
-vitals_short <-
+# Merge all with vitals
+icu_first <-
   icu_first %>%
-  # inttime numeric for faster computation
-  mutate(intime_num = as.numeric(as_date(intime))) %>%
-  # Select the vars I'll use to filter labevents
-  select(subject_id, hadm_id, intime_num) %>% 
-  # Merge lab data
-  left_join(vitals_short, 
-            by= c("subject_id","hadm_id")) %>%
-  # charttime numeric for faster computation
-  mutate(charttime_num = as.numeric(as_date(charttime))) %>%
-  # drop labs before hospitalization (if any)
-  filter(charttime_num >= intime_num) %>%
-  group_by(subject_id, itemid) %>%
-  slice_min(charttime_num, with_ties = FALSE) %>%
-  select(-stay_id, -charttime, -charttime_num) %>%
-  pivot_wider(names_from = vitemid, values_from = valuenum) 
+  left_join(vitals_short, by = c("subject_id", "stay_id"))
 
 # Drop auxiliary file to save memory
+rm(vitals_short)
 
 # Print the results
 print(icu_first, width = Inf)
