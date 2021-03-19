@@ -47,13 +47,27 @@ From this brief explanation, we can obtain a few take-aways. First, not all miss
 Finally, beyond the scope of this explanation but important to mention, is the development of some recent graph-based versions of these categories, that allow researchers to justify their reasoning about missingness using their substantive understanding represented in graphical model. This approach has provided conditioning under which we can address even in the **MNAR** case. More details can be found in [Mohan and Pearl (2021)](https://ftp.cs.ucla.edu/pub/stat_ser/r473-L.pdf).
 
 
+
 2. Explain in a couple of sentences how the Multiple Imputation by Chained Equations (MICE) work.
+
+The MICE algorithm works by iterating over a series of predictive models built for each variable at a time, going over all variables to impute, and finish when the algorithm converges:
+
+* Select a variable to impute: `data$v`
+* Randomly complete missing entries for all other variables: `data[,-v]`
+* Use the `-v` variables as features in the prediction model for `v`
+* Iterate across variables until all have been imputed
+* Repeat, starting from the imputed dataset, until convergence.
+
+Here, convergence refer to approximating the correlation between variables in the original data. How fast the algorithm converges would depend on how informative the data is; the higher the original correlation, the faster.
+
+Alternatively, instead of the predictive model approach just described, a "predictive mean matching" method can be used. This is just an application of knn to impute missing values, that is most useful to impute multimodal, integer or skewed variables, cases where the predictive approach tend to fail.
+
 
 3. Perform a data quality check of the ICU stays data. Discard variables with substantial missingness, say >5000 `NA`s. Replace apparent data entry errors by `NA`s.
 
 First, let's start by exploring our dataset. Here I print the data before any missing data imputation for reference.
 
-```{r}
+```{r, cache=TRUE}
 # Load the dataset
 path <- "/home/pdgeraldo/biostat-203b-2021-winter/hw3/mimiciv_shiny"
 data <- readRDS(paste0(path,"/icu_cohort.rds"))
@@ -64,7 +78,7 @@ We have `r nrow(data)` observations and `r ncol(data)` variables. However, among
 
 Let's start with the categorical variables, exploring their distribution by the outcome of interest.
 
-```{r}
+```{r, cache=TRUE}
 # Use for some descriptive tables
 library("SmartEDA")
 
@@ -91,7 +105,7 @@ data %>%
 
 From exploring the categorical variables in our dataset, we can observe a few patterns. First, there are many variables without missing values, or with unspecific but still informative values. For example, the `language` variable contains "English" and "?" as possibles answers, but we can easily transform this into a binary variable `speaks_english` yes or no. In the case of `marital_status`, we have `r nrow(data[data$marital_status=="NA",])` missing values, so this is a candidate for imputation (valid values are Divorced, Married, Single and Widowed). Finally, we have the `ethnicity` variable, with `r nrow(data[data$ethnicity=="UNKNOWN",])` declared as "unknown", and `r nrow(data[data$ethnicity=="UNABLE TO OBTAIN",])` declared as "unable to obtain. Valid answers are American Indian/Alaska Native, Asian, Black/African American, Hispanic/Latino, White, and Other. For the sake of this exercise, I will also consider this as a candidate for imputation, although 
 
-```{r}
+```{r, cache=TRUE}
 # List numerical variables
 numvars <- data %>%
   # Remove identifiers and other useless vars
