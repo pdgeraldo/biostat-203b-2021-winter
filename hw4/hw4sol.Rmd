@@ -50,7 +50,7 @@ Finally, beyond the scope of this explanation but important to mention, is the d
 
 2. Explain in a couple of sentences how the Multiple Imputation by Chained Equations (MICE) work.
 
-The MICE algorithm works by iterating over a series of predictive models built for each variable at a time, going over all variables to impute, and finish when the algorithm converges:
+The MICE algorithm works by iterating over a series of predictive models (in this case, random forest) built for each variable at a time, going over all variables to impute, and finish when the algorithm converges:
 
 * Select a variable to impute: `data$v`
 * Randomly complete missing entries for all other variables: `data[,-v]`
@@ -65,29 +65,42 @@ Alternatively, instead of the predictive model approach just described, a "predi
 
 3. Perform a data quality check of the ICU stays data. Discard variables with substantial missingness, say >5000 `NA`s. Replace apparent data entry errors by `NA`s.
 
-First, let's start by exploring our dataset. Here I print the data before any missing data imputation for reference.
+First, let's start by exploring our dataset. For reference, I print the data before any missing data imputation. Notice that I remove variables uninformative for prediction or imputation (like the identifiers), and any variable that could potentially contain information about the "future" of the patient (like last care unit, time moved out of icu, length of stay, etc.).
 
 ```{r, cache=TRUE}
 # Load the dataset
 path <- "/home/pdgeraldo/biostat-203b-2021-winter/hw3/mimiciv_shiny"
 data <- readRDS(paste0(path,"/icu_cohort.rds"))
+
+# Identify variables to remove
+vardrop <- c("subject_id", "hadm_id",
+             "stay_id", "last_careunit",
+             "intime",
+             "edregtime","edouttime",
+             "outtime","los",
+             "dischtime","deathtime",
+             "discharge_location",
+             "edouttime",
+             "hospital_expire_flag",
+             "anchor_year","anchor_year_group",
+             "dod", "deathdiff")
+
+# Select subset of variables and print the data
+data <- data %>% select(-any_of(vardrop))
 print(data, width = Inf)
 ```
 
-We have `r nrow(data)` observations and `r ncol(data)` variables. However, among these variables there are some which are uninformative for the imputation and modeling process, so I will remove them before proceeding. For example, I remove the three identifiers, but additionally `anchor_year_group` and `dod`. Also, it is important to note that the appropriate way of summarizing variables (and, later, of modeling their missingness) would vary for numeric versus categorical variables, so I would explore them separately.
-
-Let's start with the categorical variables, exploring their distribution by the outcome of interest.
+Now we have `r nrow(data)` observations and `r ncol(data)` variables. Also, it is important to note that the appropriate way of summarizing variables (and, later, of modeling their missingness) would vary for numeric versus categorical variables, so I would explore them separately. Let's first look at the categorical variables, exploring their distribution by the outcome of interest.
 
 ```{r, cache=TRUE}
 # Use for some descriptive tables
 library("SmartEDA")
 
 # List categorical variables
-catvars <- c("first_careunit",
-             "last_careunit",
+catvars <- c("mort30",
+             "first_careunit",
              "admission_type",
              "admission_location",
-             "discharge_location",
              "insurance",
              "language",
              "marital_status",
@@ -96,35 +109,126 @@ catvars <- c("first_careunit",
 
 # Create table for categorical variables
 data %>%
-  select(all_of(catvars),
-         mort30) %>%
+  select(all_of(catvars)) %>%
   ExpCTable(Target = "mort30",
             margin=1, clim=10, nlim=3,
             round=2, bin=NULL, per=FALSE)
 ```
 
-From exploring the categorical variables in our dataset, we can observe a few patterns. First, there are many variables without missing values, or with unspecific but still informative values. For example, the `language` variable contains "English" and "?" as possibles answers, but we can easily transform this into a binary variable `speaks_english` yes or no. In the case of `marital_status`, we have `r nrow(data[data$marital_status=="NA",])` missing values, so this is a candidate for imputation (valid values are Divorced, Married, Single and Widowed). Finally, we have the `ethnicity` variable, with `r nrow(data[data$ethnicity=="UNKNOWN",])` declared as "unknown", and `r nrow(data[data$ethnicity=="UNABLE TO OBTAIN",])` declared as "unable to obtain. Valid answers are American Indian/Alaska Native, Asian, Black/African American, Hispanic/Latino, White, and Other. For the sake of this exercise, I will also consider this as a candidate for imputation, although 
+From exploring the categorical variables in our dataset, we can observe a few patterns. First, there are many variables without missing values, or with unspecific but still informative labels. For example, the `language` variable contains "English" and "?" as possibles answers, but we can easily transform this into a binary variable `speaks_english` yes or no. 
+
+In the case of `marital_status`, we have `r nrow(data[data$marital_status=="NA",])` missing values (valid values are Divorced, Married, Single and Widowed). I will use this as as a candidate for imputation, although the amount of missingness might seem a little extreme; I could certainly have processed this variable like `language` creating and "unknown" category, but I'll try to impute it for the sake of the exercise. Finally, we have the `ethnicity` variable, with `r nrow(data[data$ethnicity=="UNKNOWN",])` declared as "unknown", and `r nrow(data[data$ethnicity=="UNABLE TO OBTAIN",])` declared as "unable to obtain". Valid answers are American Indian/Alaska Native, Asian, Black/African American, Hispanic/Latino, White, and Other. Given the amount of missing data, and that I am in doubt if actually imputing the ethnicity would make a lot of sense in an actual application, I will recode both "unknown" and "unable to obtain" as the same category and leave it that way for the analysis.
+
+Let's now look at the numerical variables in our data.
 
 ```{r, cache=TRUE}
 # List numerical variables
 numvars <- data %>%
-  # Remove identifiers and other useless vars
-  select(-subject_id, -hadm_id,
-         -stay_id, -dod, -deathdiff,
-         -anchor_year_group,
-         # Remove categorical vars
-         -all_of(catvars)) %>%
+  # Remove categorical vars
+  select(-any_of(catvars)) %>%
   names()
 
 # Summarize numerical variables
 data %>% 
-  select(all_of(numvars)) %>%
+  select(all_of(numvars), "mort30") %>%
+  # by=G: by group (GA would printi by group and all)
+  # gp="mort30": show by outcome
   ExpNumStat(by = "G", gp = "mort30",
              Qnt = seq(0,1,0.25),
              MesofShape = 1,
              Outlier = TRUE,
              round = 2)
 ```
+
+In the case of numerical variables, we can see a few variables that are problematic, while others seem like good candidates for imputation. On the first group, the `arterial_blood_pressure_*` variables have around 50\% missing, and also many registered negative values, which seems odd. However, notice that  missingness is a around 10\% less in the group that ends up dying within 30 days. My interpretation is that this *invasive* measure is taken only on people already experiencing a complex condition, and having this variable observed makes more likely to end up dying during hospitalization. In this scenario, it is probably not advisable trying to impute the *values* of the variable, but also its presence containes useful predictive information. So I will create an indicator variable to register if the person has a measure of arterial blood pressure or not, and drop its values.
+
+Something similar occurs with `lactate`, that has 42\% missing among those surviving and 19\% missing among those dying. Once again, it is probably useless trying to impute the *values* of that variable for the entire sample; however, it is useful to keep track if there is a valid measure of `lactate` in a patient's record or not, since it is predictive of the outcome. For the rest of the variables, we can see there is a pattern that, in general, patients that end up dying withing the hospitalization tend to have *more* missing values than those surviving. 
+
+```{r, cache=TRUE}
+# First, recode the data
+data <- 
+  data %>%
+  mutate(speaks_english = 
+           ifelse(language=="ENGLISH", 1, 0),
+         # Recode as NA in ethnicity
+         ethnicity =
+           case_when(
+             ethnicity=="UNABLE TO OBTAIN" ~ "NOT REGISTERED",
+             ethnicity=="UNKNOWN" ~ "NOT REGISTERED",
+             TRUE ~ ethnicity
+           ),
+         # Indicator for having arterial bp
+         arterial_bp_recorded =
+           case_when(
+             is.na(arterial_blood_pressure_mean) ~ 0L,
+             is.na(arterial_blood_pressure_systolic) ~ 0L,
+             TRUE ~ 1L
+           ),
+         # Indicator for lactate
+         lactate_recorded = ifelse(is.na(lactate), 0, 1),
+         # Transform admittime
+         # To have some seasonality information
+         # First, time of the day (am vs pm)
+         is_am = lubridate::am(admittime) %>%
+           as.numeric(),
+         # Epidemiological week
+         epi_week = lubridate::epiweek(admittime),
+         # Epidemiological year
+         epi_year = lubridate::epiyear(admittime))
+
+# Remove variables already used
+data <- 
+  data %>% 
+  select(-c("arterial_blood_pressure_mean",
+           "arterial_blood_pressure_systolic",
+           "lactate",
+           "language",
+           "admittime"))
+
+# Update our variable listing
+# In catvars, replace language by the recoded version
+catvars <- c(catvars[1:4],catvars[6:8],
+             "speaks_english",
+             "arterial_bp_recorded",
+             "lactate_recorded",
+             "is_am","mort30")
+# In numvars, drop used ones and add newly created
+numvars <- c(numvars[2:7],numvars[10:19],
+             "epi_week","epi_year")
+```
+
+We still care about some outliers, as appearing in our exploration (here and in the previous homework). I will use a somewhat common, crude but still useful measure to identify outliers, as $\pm 3 SD$. The reason for this choice is that it is less strict than other alternatives ($\pm 2 SD$, $\pm 1.5\text{ IQR}$), but in the context at hand we would want to allow for some extreme values, while still caughting those that most likely come from errors of measurement. 
+
+```{r, cache=TRUE}
+# Now, identify and recode outliers as NA
+# For ref: https://www.statology.org/remove-outliers-r/
+# For ref: https://www.r-bloggers.com/2017/12/combined-outlier-detection-with-dplyr-and-ruler/
+
+# Calculate z-scores
+z_scores <- 
+  as.data.frame(
+    sapply(data %>% select(numvars),
+           function(df) (abs(df-mean(df,na.rm = TRUE))/sd(df,na.rm = TRUE))))
+
+# Use z-scores to recode variables as NA
+# Iterate over variables
+for(i in numvars){
+  # Create an aux variable with z-scores
+  aux <- z_scores[,i]
+  # Use it to remove NAs
+  data[which(aux>=3),i] <- NA
+}
+
+# The final (numerical) data looks like this
+data %>% 
+  select(all_of(numvars)) %>%
+  summary()
+```
+
+Two final notes on how I am handling missingness. Specially regarding outliers, but true in general, one would want to consult with someone with domain knowledge about plausible values for these health measures, to make sure one is not allowing values to extreme or dropping values that, while being extreme, could still be possible in hospitalized patients. Finally, the previous analysis clearly shows that the information is not **MCAR**, but we can't tell if it is **MAR** from the data. So, to proceed with multiple imputation, we are *assuming* that the data is missing *at random* so we can build the imputation, and later, prediction models.
+
+Now I will recode the data to account for the changes just described. I will also use some of the temporal information (`admittime`) to create variables accounting for seasonality (time of the day, epidemiological week and month). To do so, I will use some functions in the `lubridate` package, including the identification of epidemiological years and weeks.
+
 
 4. Impute missing values by `miceRanger` (request $m=3$ datasets). This step is very computational intensive. Make sure to save the imputation results as a file.
 
