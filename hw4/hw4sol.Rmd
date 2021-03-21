@@ -67,7 +67,7 @@ Alternatively, instead of the predictive model approach just described, a "predi
 
 First, let's start by exploring our dataset. For reference, I print the data before any missing data imputation. Notice that I remove variables uninformative for prediction or imputation (like the identifiers), and any variable that could potentially contain information about the "future" of the patient (like last care unit, time moved out of icu, length of stay, etc.).
 
-```{r, cache=TRUE}
+```{r}
 # Load the dataset
 path <- "/home/pdgeraldo/biostat-203b-2021-winter/hw3/mimiciv_shiny"
 data <- readRDS(paste0(path,"/icu_cohort.rds"))
@@ -187,13 +187,15 @@ data <-
 
 # Update our variable listing
 # In catvars, replace language by the recoded version
-catvars <- c(catvars[1:4],catvars[6:8],
+catvars <- c(catvars[-6], # remove language
              "speaks_english",
              "arterial_bp_recorded",
              "lactate_recorded",
-             "is_am","mort30")
+             "is_am")
+
 # In numvars, drop used ones and add newly created
-numvars <- c(numvars[2:7],numvars[10:19],
+# remove admittime, arterial bp, lactate
+numvars <- c(numvars[-c(1,8,9,20)], 
              "epi_week","epi_year")
 ```
 
@@ -207,7 +209,7 @@ We still care about some outliers, as appearing in our exploration (here and in 
 # Calculate z-scores
 z_scores <- 
   as.data.frame(
-    sapply(data %>% select(numvars),
+    sapply(data %>% select(all_of(numvars)),
            function(df) (abs(df-mean(df,na.rm = TRUE))/sd(df,na.rm = TRUE))))
 
 # Use z-scores to recode variables as NA
@@ -232,15 +234,166 @@ Now I will recode the data to account for the changes just described. I will als
 
 4. Impute missing values by `miceRanger` (request $m=3$ datasets). This step is very computational intensive. Make sure to save the imputation results as a file.
 
+The code below is what produces the three imputed datasets. Here I will not run it, since it takes more than three and a half hours. I stored the results as an image of the environment at the end, so I can reuse it without running the routine.
+
+```{r, eval=FALSE}
+# Lets reorganize the data columns
+# To avoid problems with miceRanger
+data <- data %>%
+  select(all_of(numvars), 
+         all_of(catvars))
+
+# miceRanger is already loaded
+require(miceRanger)
+set.seed(2017)
+
+# Create the imputation schema
+# Prediction for numeric variables
+# Mean matching for categorical variables
+#selector <- rep("value", 30)
+#names(selector) <- names(data)
+#selector["marital_status"] <- "meanMatch"
+
+# Ask for 3 imputed datasets
+# Inform progress as it goes
+# Limit the depth of the trees
+# to avoid computational overhead
+micedata <- 
+  miceRanger(data, m=3,
+             #vars = names(data),
+             #valueSelector = selector,
+             #meanMatchCandidates = 3,
+             returnModels = TRUE,
+             verbose = TRUE,
+             max.depth = 10)
+
+save.image("~/biostat-203b-2021-winter/hw4/miceobject.RData")
+```
+```{r, echo=FALSE}
+load("miceobject.RData")
+micedata
+summary(micedata)
+```
+
+
 5. Make imputation diagnostic plots and explain what they mean.
 
+### Distributions
+
+First, let's plot the distribution of the imputed variables. Most of them do not look very different than in the original (unimputed) dataset. Among numerical variables, the three most noticeable differences are in `heart_rate` and `respiratory_rate`, being both less skewed on the imputed datasets, and `sodium`, which has a higher spread on the imputed than in the original data.
+
+```{r}
+plotDistributions(micedata,
+                  vars='allNumeric')
+```
+
+The categorical variables I used for imputation was `marital_status`. As we can see, the most noticeable difference is that, on the imputed datasets, there are proportionally less married  and more single people. This means that, conditional on covariates, the model predicts single people are more likely to have missing their marital status.
+
+```{r}
+plotDistributions(micedata,
+                  vars='allCategorical')
+```
+
+### Correlations 
+
+We can also explore the correlations between imputed variables across datasets. This diagnostic does not look great overall, since the correlations are very low and there is lack of convergence over iterations. This probably means that we should run further iterations to develop a good imputation model, and also that the data *we have* is not sufficiently informative about the data *we don't have*.
+
+```{r}
+plotCorrelations(micedata)
+```
+
+### Convergence
+
+On the other hand, the convergence plot below shows the convergence in mean and standard deviation of the imputed values across datasets. It does not look as bad as the previous one, so overall the model didn't do a terrible job, despite that it likely would benefit from more iterations. 
+
+```{r}
+plotVarConvergence(micedata)
+```
+### Model error
+
+The model error plot below is a crude approximation to modeling error (classification accuracy) in the random forests underlying the `miceRanger` algorithm. They look very good in general. Recall that the first iteration assign values at random, so we expect a big jump from the second iteration. This is the case in most variables, except for the heart rate variables, sodium, hematocrit and wbc, which seem to be less well captured by the model.
+
+```{r}
+plotModelError(micedata)
+```
+
+### Variable importance
+
+Then we have the variable importance plot, showing the "weight" of each variable when imputing another variable. By default the importances are rescaled within each variable being imputed, therefore one should not compare *across* variables. Here we can see that in most cases, the imputed values come from a combination of many variables, with more or less "uniform" importance. However, there are a few variable for which the values come most importantly from a single variable. For example, respiratory and heart rate, and some lab measures (bicarbonate and chloride, chrloride and sodium, glucose and wbc). On the other hand, and not surprisingly, across all models and imputed datasets the most important determinant of marital status is age.
+
+```{r}
+plotVarImportance(micedata,
+                  display = "Relative",
+                  tl.cex = 0.5,
+                  tl.col = "black",
+                  number.cex = 0.4,
+                  cl.pos = "n",
+                  #cl.align.text = "l", 
+                  type = "upper")
+```
+
+### Imputation Variance
+
+Finally, we can explore how much variability there is in the imputed variables with respect to the variance on the non-imputed variable. For numerical variables, this is captured by the standard deviation of the imputed values in each dataset. In the plots below, the shaded area correspond to cases when the standard deviation of the imputed values is *less* than the standard deviation of the original data. This is the case in the majority of the three imputed datasets, as expected if we have other variables sufficiently informative to perform a reasonable imputation process.
+
+For marital status, we can see a plot very similar to the distribution plot above. This is showing that three categories were imputed, with one category (married) being less present as an imputed value than one would expect if values were randomly selected from the original data, while other category (single, or category 1 in the plot) was more present than expected if random imputations were performed.
+
+```{r}
+plotImputationVariance(micedata, ncol=2, widths=c(6,2))
+``` 
+
 6. Obtain a complete data set by averaging the 3 imputed data sets.
+
+Here I averaged over the three datasets generated by `miceRanger`, by first passing them to the `model.matrix` function and unlisting the result, so I can use the `rowMeans` function (obtaining an element-wise average, for each variable/value). Finally, I saved a copy of the generated dataset for later use.
+
+```{r, eval = FALSE}
+# Call the imputed datasets
+# Load them in a list
+dataList <- completeData(micedata)
+#head(dataList[[1]],10)
+
+# Apply the model.matrix function 
+# to each data.frame in list
+dataArray <- 
+  lapply(seq_along(dataList),
+         function(i) model.matrix(mort30 ~., data = dataList[[i]]))
+
+# Unlist, keep the names
+varnames <- colnames(dataArray[[1]])
+dataArray <- array(unlist(dataArray), 
+                   # Keep dimensions of model.matrix data
+                   dim = c(nrow(dataArray[[1]]),
+                           ncol(dataArray[[1]]),3))
+
+# Average over datasets
+datamice <- rowMeans(dataArray, dims = 2) %>%
+  as.data.frame()
+
+# Re-assign variable names
+names(datamice) <- varnames
+
+# Save avaraged dataset
+write_csv(datamice, "datamice.csv")
+```
+
 
 ## Q2. Predicting 30-day mortality
 
 Develop at least two analytic approaches for predicting the 30-day mortality of patients admitted to ICU using demographic information (gender, age, marital status, ethnicity), first lab measurements during ICU stay, and first vital measurements during ICU stay. For example, you can use (1) logistic regression (`glm()` function), (2) logistic regression with lasso penalty (glmnet package), (3) random forest (randomForest package), or (4) neural network.
 
+### Solutions
+
+For this section, I will use the `caret` package, that is a collection of statistical and machine learning models for classification and regression, that has the advantage of using a common syntax for a wide variety of models. So I can simplify the process of model fitting and comparison. 
+
 1. Partition data into 80% training set and 20% test set. Stratify partitioning according the 30-day mortality status.
+
+```{r}
+# First, let's load the data generated 
+# averaging the imputed datasets
+datamice <- read_csv("datamice.csv")
+
+#
+```
 
 2. Train the models using the training set.
 
