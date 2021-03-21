@@ -1,5 +1,6 @@
 ---
-title: "Biostat 203B Homework 4 (Draft)"
+title: "Biostat 203B Homework 4"
+author: Pablo Geraldo
 subtitle: Due Mar 12 @ 11:59PM
 output:
   # ioslides_presentation: default
@@ -33,23 +34,617 @@ Through the Shiny app developed in HW3, we observe abundant missing values in th
 
 1. Explain the jargon MCAR, MAR, and MNAR.
 
+In missing data analysis, it is common to refer to this typology, explained in detail by [Little and Rubin (1987)](https://www.google.com/books/edition/Statistical_Analysis_with_Missing_Data/OaiODwAAQBAJ?hl=en&gbpv=0) "Statistical Analysis with Missing Data". The key point is to identify the reasons why some data is not observed in our dataset and, depending on the process generating missingness, the appropriate way to handle it could change.
+
+**MCAR** (Missing Completely at Random) refers to the case where some values on a variable of interest are unrecorded, but there is no systematic association between that missingness and the observed variables, nor any parameter of interest. This is the same to saying that the complete cases are a random sample of the population of interest, so a complete case analysis would be unbiased.
+
+**MAR** (Missing at Random) refers to the case where we have missing values in a variable of interest, and that missingness *is associated* with the underlying, unobserved values. This means that a complete case analysis would be biased. However, if the process generating missingness is **MAR**, this means that it is *conditionally* at random. In other words, conditional on covariates, what we observed is a random sample of the underlying values. In this case is when multiple imputation, and other imputation methods, actually works, since they impute the missing values based on the values of other, observed, covariates.
+
+**MNAR** (Missing Not at Random), finally, refers to the case where the missingness pattern in a variable of interest is associated to its underlying (unobserved) values, in a way that is not dependent or captures by observed covariates. In this case, there is no way to recover or approximate the values that the variable would have attained have it been completely observed, and therefore no imputation method would do a good job in approximating the full data. Although imputation methods, including multiple imputation, might ameliorate the bias in the complete case analysis, no method would be enough to completely remove bias.
+
+From this brief explanation, we can obtain a few take-aways. First, not all missing data is created equal. Depending on the missingness mechanism, multiple imputation might, or might not, help. Second, that the *missingness mechanism* refers to each variable at a time, not the complete dataset. In other words, we can have in the same dataset variables that are **MCAR** so don't need imputation, others that are **MAR** so we can successfully impute them using a MI algorithm, and variables that are **MNAR**, and therefore no imputation would recover the true distribution. 
+
+Finally, beyond the scope of this explanation but important to mention, is the development of some recent graph-based versions of these categories, that allow researchers to justify their reasoning about missingness using their substantive understanding represented in graphical model. This approach has provided conditioning under which we can address even in the **MNAR** case. More details can be found in [Mohan and Pearl (2021)](https://ftp.cs.ucla.edu/pub/stat_ser/r473-L.pdf).
+
+
+
 2. Explain in a couple of sentences how the Multiple Imputation by Chained Equations (MICE) work.
+
+The MICE algorithm works by iterating over a series of predictive models (in this case, random forest) built for each variable at a time, going over all variables to impute, and finish when the algorithm converges:
+
+* Select a variable to impute: `data$v`
+* Randomly complete missing entries for all other variables: `data[,-v]`
+* Use the `-v` variables as features in the prediction model for `v`
+* Iterate across variables until all have been imputed
+* Repeat, starting from the imputed dataset, until convergence.
+
+Here, convergence refer to approximating the correlation between variables in the original data. How fast the algorithm converges would depend on how informative the data is; the higher the original correlation, the faster.
+
+Alternatively, instead of the predictive model approach just described, a "predictive mean matching" method can be used. This is just an application of knn to impute missing values, that is most useful to impute multimodal, integer or skewed variables, cases where the predictive approach tend to fail.
+
 
 3. Perform a data quality check of the ICU stays data. Discard variables with substantial missingness, say >5000 `NA`s. Replace apparent data entry errors by `NA`s.
 
+First, let's start by exploring our dataset. For reference, I print the data before any missing data imputation. Notice that I remove variables uninformative for prediction or imputation (like the identifiers), and any variable that could potentially contain information about the "future" of the patient (like last care unit, time moved out of icu, length of stay, etc.).
+
+```{r}
+# Load the dataset
+path <- "/home/pdgeraldo/biostat-203b-2021-winter/hw3/mimiciv_shiny"
+data <- readRDS(paste0(path,"/icu_cohort.rds"))
+
+# Identify variables to remove
+vardrop <- c("subject_id", "hadm_id",
+             "stay_id", "last_careunit",
+             "intime",
+             "edregtime","edouttime",
+             "outtime","los",
+             "dischtime","deathtime",
+             "discharge_location",
+             "edouttime",
+             "hospital_expire_flag",
+             "anchor_year","anchor_year_group",
+             "dod", "deathdiff")
+
+# Select subset of variables and print the data
+data <- data %>% select(-any_of(vardrop))
+print(data, width = Inf)
+```
+
+Now we have `r nrow(data)` observations and `r ncol(data)` variables. Also, it is important to note that the appropriate way of summarizing variables (and, later, of modeling their missingness) would vary for numeric versus categorical variables, so I would explore them separately. Let's first look at the categorical variables, exploring their distribution by the outcome of interest.
+
+```{r, cache=TRUE}
+# Use for some descriptive tables
+library("SmartEDA")
+
+# List categorical variables
+catvars <- c("mort30",
+             "first_careunit",
+             "admission_type",
+             "admission_location",
+             "insurance",
+             "language",
+             "marital_status",
+             "ethnicity",
+             "gender")
+
+# Create table for categorical variables
+data %>%
+  select(all_of(catvars)) %>%
+  ExpCTable(Target = "mort30",
+            margin=1, clim=10, nlim=3,
+            round=2, bin=NULL, per=FALSE)
+```
+
+From exploring the categorical variables in our dataset, we can observe a few patterns. First, there are many variables without missing values, or with unspecific but still informative labels. For example, the `language` variable contains "English" and "?" as possibles answers, but we can easily transform this into a binary variable `speaks_english` yes or no. 
+
+In the case of `marital_status`, we have `r nrow(data[data$marital_status=="NA",])` missing values (valid values are Divorced, Married, Single and Widowed). I will use this as as a candidate for imputation, although the amount of missingness might seem a little extreme; I could certainly have processed this variable like `language` creating and "unknown" category, but I'll try to impute it for the sake of the exercise. Finally, we have the `ethnicity` variable, with `r nrow(data[data$ethnicity=="UNKNOWN",])` declared as "unknown", and `r nrow(data[data$ethnicity=="UNABLE TO OBTAIN",])` declared as "unable to obtain". Valid answers are American Indian/Alaska Native, Asian, Black/African American, Hispanic/Latino, White, and Other. Given the amount of missing data, and that I am in doubt if actually imputing the ethnicity would make a lot of sense in an actual application, I will recode both "unknown" and "unable to obtain" as the same category and leave it that way for the analysis.
+
+Let's now look at the numerical variables in our data.
+
+```{r, cache=TRUE}
+# List numerical variables
+numvars <- data %>%
+  # Remove categorical vars
+  select(-any_of(catvars)) %>%
+  names()
+
+# Summarize numerical variables
+data %>% 
+  select(all_of(numvars), "mort30") %>%
+  # by=G: by group (GA would printi by group and all)
+  # gp="mort30": show by outcome
+  ExpNumStat(by = "G", gp = "mort30",
+             Qnt = seq(0,1,0.25),
+             MesofShape = 1,
+             Outlier = TRUE,
+             round = 2)
+```
+
+In the case of numerical variables, we can see a few variables that are problematic, while others seem like good candidates for imputation. On the first group, the `arterial_blood_pressure_*` variables have around 50\% missing, and also many registered negative values, which seems odd. However, notice that  missingness is a around 10\% less in the group that ends up dying within 30 days. My interpretation is that this *invasive* measure is taken only on people already experiencing a complex condition, and having this variable observed makes more likely to end up dying during hospitalization. In this scenario, it is probably not advisable trying to impute the *values* of the variable, but also its presence containes useful predictive information. So I will create an indicator variable to register if the person has a measure of arterial blood pressure or not, and drop its values.
+
+Something similar occurs with `lactate`, that has 42\% missing among those surviving and 19\% missing among those dying. Once again, it is probably useless trying to impute the *values* of that variable for the entire sample; however, it is useful to keep track if there is a valid measure of `lactate` in a patient's record or not, since it is predictive of the outcome. For the rest of the variables, we can see there is a pattern that, in general, patients that end up dying withing the hospitalization tend to have *more* missing values than those surviving. 
+
+```{r, cache=TRUE}
+# First, recode the data
+data <- 
+  data %>%
+  mutate(speaks_english = 
+           ifelse(language=="ENGLISH", 1, 0),
+         # Recode as NA in ethnicity
+         ethnicity =
+           case_when(
+             ethnicity=="UNABLE TO OBTAIN" ~ "NOT REGISTERED",
+             ethnicity=="UNKNOWN" ~ "NOT REGISTERED",
+             TRUE ~ ethnicity
+           ),
+         # Indicator for having arterial bp
+         arterial_bp_recorded =
+           case_when(
+             is.na(arterial_blood_pressure_mean) ~ 0L,
+             is.na(arterial_blood_pressure_systolic) ~ 0L,
+             TRUE ~ 1L
+           ),
+         # Indicator for lactate
+         lactate_recorded = ifelse(is.na(lactate), 0, 1),
+         # Transform admittime
+         # To have some seasonality information
+         # First, time of the day (am vs pm)
+         is_am = lubridate::am(admittime) %>%
+           as.numeric(),
+         # Epidemiological week
+         epi_week = lubridate::epiweek(admittime),
+         # Epidemiological year
+         epi_year = lubridate::epiyear(admittime))
+
+# Remove variables already used
+data <- 
+  data %>% 
+  select(-c("arterial_blood_pressure_mean",
+           "arterial_blood_pressure_systolic",
+           "lactate",
+           "language",
+           "admittime"))
+
+# Update our variable listing
+# In catvars, replace language by the recoded version
+catvars <- c(catvars[-6], # remove language
+             "speaks_english",
+             "arterial_bp_recorded",
+             "lactate_recorded",
+             "is_am")
+
+# In numvars, drop used ones and add newly created
+# remove admittime, arterial bp, lactate
+numvars <- c(numvars[-c(1,8,9,20)], 
+             "epi_week","epi_year")
+```
+
+We still care about some outliers, as appearing in our exploration (here and in the previous homework). I will use a somewhat common, crude but still useful measure to identify outliers, as $\pm 3 SD$. The reason for this choice is that it is less strict than other alternatives ($\pm 2 SD$, $\pm 1.5\text{ IQR}$), but in the context at hand we would want to allow for some extreme values, while still caughting those that most likely come from errors of measurement. 
+
+```{r, cache=TRUE}
+# Now, identify and recode outliers as NA
+# For ref: https://www.statology.org/remove-outliers-r/
+# For ref: https://www.r-bloggers.com/2017/12/combined-outlier-detection-with-dplyr-and-ruler/
+
+# Calculate z-scores
+z_scores <- 
+  as.data.frame(
+    sapply(data %>% select(all_of(numvars)),
+           function(df) (abs(df-mean(df,na.rm = TRUE))/sd(df,na.rm = TRUE))))
+
+# Use z-scores to recode variables as NA
+# Iterate over variables
+for(i in numvars){
+  # Create an aux variable with z-scores
+  aux <- z_scores[,i]
+  # Use it to remove NAs
+  data[which(aux>=3),i] <- NA
+}
+
+# The final (numerical) data looks like this
+data %>% 
+  select(all_of(numvars)) %>%
+  summary()
+```
+
+Two final notes on how I am handling missingness. Specially regarding outliers, but true in general, one would want to consult with someone with domain knowledge about plausible values for these health measures, to make sure one is not allowing values to extreme or dropping values that, while being extreme, could still be possible in hospitalized patients. Finally, the previous analysis clearly shows that the information is not **MCAR**, but we can't tell if it is **MAR** from the data. So, to proceed with multiple imputation, we are *assuming* that the data is missing *at random* so we can build the imputation, and later, prediction models.
+
+Now I will recode the data to account for the changes just described. I will also use some of the temporal information (`admittime`) to create variables accounting for seasonality (time of the day, epidemiological week and month). To do so, I will use some functions in the `lubridate` package, including the identification of epidemiological years and weeks.
+
+
 4. Impute missing values by `miceRanger` (request $m=3$ datasets). This step is very computational intensive. Make sure to save the imputation results as a file.
+
+The code below is what produces the three imputed datasets. Here I will not run it, since it takes more than three and a half hours. I stored the results as an image of the environment at the end, so I can reuse it without running the routine.
+
+```{r, eval=FALSE}
+# Lets reorganize the data columns
+# To avoid problems with miceRanger
+data <- data %>%
+  select(all_of(numvars), 
+         all_of(catvars))
+# Store a copy of data pre-imputation
+write_csv(data, "data.csv")
+
+# miceRanger is already loaded
+require(miceRanger)
+set.seed(2017)
+
+# Create the imputation schema
+# Prediction for numeric variables
+# Mean matching for categorical variables
+#selector <- rep("value", 30)
+#names(selector) <- names(data)
+#selector["marital_status"] <- "meanMatch"
+
+# Ask for 3 imputed datasets
+# Inform progress as it goes
+# Limit the depth of the trees
+# to avoid computational overhead
+micedata <- 
+  miceRanger(data, m=3,
+             #vars = names(data),
+             #valueSelector = selector,
+             #meanMatchCandidates = 3,
+             returnModels = TRUE,
+             verbose = TRUE,
+             max.depth = 10)
+
+save.image("~/biostat-203b-2021-winter/hw4/miceobject.RData")
+```
+```{r, echo=FALSE}
+load("miceobject.RData")
+micedata
+summary(micedata)
+```
+
 
 5. Make imputation diagnostic plots and explain what they mean.
 
+### Distributions
+
+First, let's plot the distribution of the imputed variables. Most of them do not look very different than in the original (unimputed) dataset. Among numerical variables, the three most noticeable differences are in `heart_rate` and `respiratory_rate`, being both less skewed on the imputed datasets, and `sodium`, which has a higher spread on the imputed than in the original data.
+
+```{r}
+plotDistributions(micedata,
+                  vars='allNumeric')
+```
+
+The categorical variables I used for imputation was `marital_status`. As we can see, the most noticeable difference is that, on the imputed datasets, there are proportionally less married  and more single people. This means that, conditional on covariates, the model predicts single people are more likely to have missing their marital status.
+
+```{r}
+plotDistributions(micedata,
+                  vars='allCategorical')
+```
+
+### Correlations 
+
+We can also explore the correlations between imputed variables across datasets. This diagnostic does not look great overall, since the correlations are very low and there is lack of convergence over iterations. This probably means that we should run further iterations to develop a good imputation model, and also that the data *we have* is not sufficiently informative about the data *we don't have*.
+
+```{r}
+plotCorrelations(micedata)
+```
+
+### Convergence
+
+On the other hand, the convergence plot below shows the convergence in mean and standard deviation of the imputed values across datasets. It does not look as bad as the previous one, so overall the model didn't do a terrible job, despite that it likely would benefit from more iterations. 
+
+```{r}
+plotVarConvergence(micedata)
+```
+### Model error
+
+The model error plot below is a crude approximation to modeling error (classification accuracy) in the random forests underlying the `miceRanger` algorithm. They look very good in general. Recall that the first iteration assign values at random, so we expect a big jump from the second iteration. This is the case in most variables, except for the heart rate variables, sodium, hematocrit and wbc, which seem to be less well captured by the model.
+
+```{r}
+plotModelError(micedata)
+```
+
+### Variable importance
+
+Then we have the variable importance plot, showing the "weight" of each variable when imputing another variable. By default the importances are rescaled within each variable being imputed, therefore one should not compare *across* variables. Here we can see that in most cases, the imputed values come from a combination of many variables, with more or less "uniform" importance. However, there are a few variable for which the values come most importantly from a single variable. For example, respiratory and heart rate, and some lab measures (bicarbonate and chloride, chrloride and sodium, glucose and wbc). On the other hand, and not surprisingly, across all models and imputed datasets the most important determinant of marital status is age.
+
+```{r}
+plotVarImportance(micedata,
+                  display = "Relative",
+                  tl.cex = 0.5,
+                  tl.col = "black",
+                  number.cex = 0.4,
+                  cl.pos = "n",
+                  #cl.align.text = "l", 
+                  type = "upper")
+```
+
+### Imputation Variance
+
+Finally, we can explore how much variability there is in the imputed variables with respect to the variance on the non-imputed variable. For numerical variables, this is captured by the standard deviation of the imputed values in each dataset. In the plots below, the shaded area correspond to cases when the standard deviation of the imputed values is *less* than the standard deviation of the original data. This is the case in the majority of the three imputed datasets, as expected if we have other variables sufficiently informative to perform a reasonable imputation process.
+
+For marital status, we can see a plot very similar to the distribution plot above. This is showing that three categories were imputed, with one category (married) being less present as an imputed value than one would expect if values were randomly selected from the original data, while other category (single, or category 1 in the plot) was more present than expected if random imputations were performed.
+
+```{r}
+plotImputationVariance(micedata, ncol=2, widths=c(6,2))
+``` 
+
 6. Obtain a complete data set by averaging the 3 imputed data sets.
+
+Here I averaged over the three datasets generated by `miceRanger`, by first passing them to the `model.matrix` function and unlisting the result, so I can use the `rowMeans` function (obtaining an element-wise average, for each variable/value). Finally, I saved a copy of the generated dataset for later use.
+
+```{r, eval = FALSE}
+# Call the imputed datasets
+# Load them in a list
+dataList <- completeData(micedata)
+#head(dataList[[1]],10)
+
+# Apply the model.matrix function 
+# to each data.frame in list
+dataArray <- 
+  lapply(seq_along(dataList),
+         function(i) model.matrix(mort30 ~., data = dataList[[i]]))
+
+# Unlist, keep the names
+varnames <- colnames(dataArray[[1]])
+dataArray <- array(unlist(dataArray), 
+                   # Keep dimensions of model.matrix data
+                   dim = c(nrow(dataArray[[1]]),
+                           ncol(dataArray[[1]]),3))
+
+# Average over datasets
+datamice <- rowMeans(dataArray, dims = 2) %>%
+  as.data.frame()
+
+# Re-assign variable names
+names(datamice) <- varnames
+
+# Save avaraged dataset
+write_csv(datamice, "datamice.csv")
+```
+
 
 ## Q2. Predicting 30-day mortality
 
 Develop at least two analytic approaches for predicting the 30-day mortality of patients admitted to ICU using demographic information (gender, age, marital status, ethnicity), first lab measurements during ICU stay, and first vital measurements during ICU stay. For example, you can use (1) logistic regression (`glm()` function), (2) logistic regression with lasso penalty (glmnet package), (3) random forest (randomForest package), or (4) neural network.
 
+### Solutions
+
+For this section, I will use the `caret` package, that is a collection of statistical and machine learning models for classification and regression, that has the advantage of using a common syntax for a wide variety of models. So I can simplify the process of model fitting and comparison. 
+
 1. Partition data into 80% training set and 20% test set. Stratify partitioning according the 30-day mortality status.
+
+Below I partition the data as required, stratifying by outcome (default behavior in `caret`). Also, notice that I created an additional version of the data, pre-processing the features, by centering and scaling (i.e., standardizing), and running a Principal Component Analysis (PCA) on them. I will later use both the unmodified and the pre-processed versions of the data to train the models.
+
+```{r}
+# First, let's load the data generated 
+# averaging the imputed datasets
+datamice <- read_csv("datamice.csv")
+# For the outcome, the original data
+data <- read_csv("data.csv")
+
+# Remove the intercept from the model.matrix
+datamice$`(Intercept)` <- NULL
+# Add the outcome to the model.matrix
+datamice$mort30 <- as.factor(data$mort30)
+
+# Call caret package
+library(caret)
+
+####################
+# Partition the data
+####################
+
+inTrain <- createDataPartition(
+  # Stratify by mortality
+  y = datamice$mort30,
+  # 20/80 split
+  # Declare 80% for training
+  p = .8,
+  # Result formatting
+  list = FALSE
+)
+
+# Now, separate the train and test data
+# using the created sampling
+training <- datamice[inTrain,]
+testing <- datamice[-inTrain,]
+
+# Then, "pre-process" the results
+# (only declaring, not runing yet)
+preProcValues <- 
+  preProcess(training[,-63], # Remove the outcome 
+             method = c("center", 
+                        "scale",
+                        "pca"))
+
+# Crete transformed datasets 
+# using the pre-process step above
+trainTransformed <- 
+  predict(preProcValues, 
+          newdata = training[,-63])
+# Add the outcome
+trainTransformed$mort30 <- training$mort30
+
+# Transform data in testing sample
+testTransformed <- 
+  predict(preProcValues, 
+          newdata = testing[,-63])
+```
 
 2. Train the models using the training set.
 
+Here I train the models by following a 3-fold cross validation scheme, searching over the space of tunning parameters using a pre-defined grid. The performance metric is classification accuracy ($\frac{\text{Number of correct predictions}}{\text{Total number of predictions}}$). 
+
+The models I will be comparing are:
+
+* **Logistic regression**: a traditional statistical technique for binary outcomes, from the family of generalized linear model using the logit link function. I will train this model twice: one with the "original" (imputed) dataset, and one with the pre-processed version described in the previous question.
+
+* **Random Forest**: a machine learning approach for regression and classification, built from combining multiple decision tress into an ensemble classifier. It can be combined with bagging (training in subsamples of the data or a sample of features) and boosting (re-training focusing on the missclassified observations). Here I used vanilla random forest, deciding the number of variables available for partitioning at each step using cross-validation. I only trained this model on the original dataset.
+
+First, let's look at the results of the logistic regression.
+
+```{r}
+
+# 1: logistic regression
+########################
+
+# No tuning parameters,
+# so, fitting on the entire data
+
+# 1.A. Original Data
+model_logitA <- 
+  train(mort30 ~ ., 
+        data = training, 
+        # use logit for classification
+        method = "glm", 
+        # entire training sample (no CV)
+        trControl = trainControl(method="none")) 
+# Make predictions in the training set
+logitApred <- 
+  predict(model_logitA, newdata=training)
+# Check confusion matrix
+confusionMatrix(logitApred, training$mort30)
+
+# 1.B. Transformed data
+model_logitB <- 
+  train(mort30 ~ ., 
+        data = trainTransformed, 
+        # use logit for classification
+        method = "glm", 
+        # entire training sample (no CV)
+        trControl = trainControl(method="none")) 
+# Make predictions in the training set
+logitBpred <- 
+  predict(model_logitB, newdata=trainTransformed)
+# Check confusion matrix
+confusionMatrix(logitBpred, training$mort30)
+```
+
+We can see that, in the training data, both logistic regression models (using the original and untransformed data) have similar prediction accuracy (around 90\%). Overall, the performance is not great, but this is expected since we are mostly using this model as a base for comparison with random forest.
+
+In the case of random forest, I selected by cross-validation the best number of features available for partitioning at each step, trying three different values, while fixing the number of trees being averaged in the forest to 25. I do this mostly for computational reasons: to make a most substantial improvement with respect to the logistic regression baseline, one would need to search over a wider range of `mtry` options, and also averaging over more trees, which is computationally very expensive.
+
+The resulting accuracy is similar to the logistic regression model, which is dissapointing but not surprising given the just explained constraints I imposed to the parameter tunning.
+
+```{r}
+############################
+# Define the training regime
+############################
+
+# 5-fold cross validation
+train_regime <- 
+  trainControl(method = "cv",
+               number = 3) 
+
+# 2. random forest
+###################
+
+# use CV to define mtry
+# i.e., # variables (random) available 
+# to partition the data at each step
+
+# 2.A. Original data
+model_rfA <- 
+  train(mort30 ~ ., 
+        data = training, 
+        method = "rf", 
+        # Try 2 diff mtry
+        ntree = 50,
+        tuneLength = 3,
+        trControl = train_regime)
+model_rfA
+# Check confusion matrix
+confusionMatrix(model_rfA)
+```
+
+
+```{r, echo = FALSE, eval=FALSE}
+
+  
+# 2.B. Transformed data
+#model_rfB <- 
+#  train(mort30 ~ ., 
+#        data = trainTransformed, 
+#        method = "rf", 
+        # Try diff mtry
+#        tuneLength = 3,
+#        trControl = train_regime)
+#model_rfB
+# Make predictions in the training set
+#rfBpred <- 
+#  predict(model_rfB, newdata=trainTransformed)
+# Check confusion matrix
+#confusionMatrix(rfBpred, training$mort30)
+
+# Other classifiers: NOT RUN!
+
+# 2: linear gaussian process
+############################
+library(kernlab)
+# No tuning parameters,
+# so, fitting on the entire data
+
+# 2.A. Original data
+model_gaussA <- 
+  train(mort30 ~ ., 
+        data = training, 
+        # use logit for classification
+        method = "gaussprLinear", 
+        # entire training sample (no CV)
+        trControl = trainControl(method="none")) 
+# Make predictions in the training set
+gaussApred <- 
+  predict(model_gaussA, newdata=training)
+# Check confusion matrix
+confusionMatrix(gaussApred, training$mort30)
+
+# 2.B. Transformed data
+model_gaussB <- 
+  train(mort30 ~ ., 
+        data = trainTransformed, 
+        # use logit for classification
+        method = "gaussprLinear", 
+        # entire training sample (no CV)
+        trControl = trainControl(method="none")) 
+# Make predictions in the training set
+gaussBpred <- 
+  predict(model_gaussB, newdata=trainTransformed)
+# Check confusion matrix
+confusionMatrix(gaussBpred, training$mort30)
+
+# 3. K-nearest neighbors
+########################
+
+# Use CV to define the number of neighbors
+
+# 3.A. Original data
+model_knnA <- 
+  train(mort30 ~ ., 
+        data = training, 
+        method = "knn", 
+        # Try 3 diff K
+        tuneLength = 3,
+        trControl = train_regime)
+model_knnA
+# Make predictions in the training set
+knnApred <- 
+  predict(model_knnA, newdata=training)
+# Check confusion matrix
+confusionMatrix(knnApred, training$mort30)
+
+# 3.B. Transformed data
+model_knnB <- 
+  train(mort30 ~ ., 
+        data = trainTransformed, 
+        method = "knn", 
+        # Try 3 diff K
+        tuneLength = 3,
+        trControl = train_regime)
+model_knnB
+# Make predictions in the training set
+knnBpred <- 
+  predict(model_knnB, newdata=trainTransformed)
+# Check confusion matrix
+confusionMatrix(knnBpred, training$mort30)
+```
+
 3. Compare model prediction performance on the test set.
+
+Now, let's compare the prediction performance in the test set for both models. As we can see from the confussion matrices below, the results are not actually that different from the cross-validation results. The overall accuracy of the three models is around 90\% in all models, both in the training and testing.
+
+In general, it seems that we are still *underfitting* the model (in the sense that train and test accuracy are very similar to each other without any regularization), so there is a lot of room for improvement.
+
+```{r}
+# Compare model performance in the test data
+# First, see logit model A
+test_logitA <- 
+  predict(model_logitA, newdata = testing)
+confusionMatrix(test_logitA, testing$mort30)
+
+# Then, logit model B
+test_logitB <- 
+  predict(model_logitB, newdata = testTransformed)
+confusionMatrix(test_logitB, testing$mort30)
+
+# Finally, the random forest
+test_rfA <- 
+  predict(model_rfA, newdata = testing)
+confusionMatrix(test_rfA, testing$mort30)
+```
 
