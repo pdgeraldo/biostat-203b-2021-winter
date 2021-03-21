@@ -242,6 +242,8 @@ The code below is what produces the three imputed datasets. Here I will not run 
 data <- data %>%
   select(all_of(numvars), 
          all_of(catvars))
+# Store a copy of data pre-imputation
+write_csv(data, "data.csv")
 
 # miceRanger is already loaded
 require(miceRanger)
@@ -387,15 +389,262 @@ For this section, I will use the `caret` package, that is a collection of statis
 
 1. Partition data into 80% training set and 20% test set. Stratify partitioning according the 30-day mortality status.
 
+Below I partition the data as required, stratifying by outcome (default behavior in `caret`). Also, notice that I created an additional version of the data, pre-processing the features, by centering and scaling (i.e., standardizing), and running a Principal Component Analysis (PCA) on them. I will later use both the unmodified and the pre-processed versions of the data to train the models.
+
 ```{r}
 # First, let's load the data generated 
 # averaging the imputed datasets
 datamice <- read_csv("datamice.csv")
+# For the outcome, the original data
+data <- read_csv("data.csv")
 
-#
+# Remove the intercept from the model.matrix
+datamice$`(Intercept)` <- NULL
+# Add the outcome to the model.matrix
+datamice$mort30 <- as.factor(data$mort30)
+
+# Call caret package
+library(caret)
+
+####################
+# Partition the data
+####################
+
+inTrain <- createDataPartition(
+  # Stratify by mortality
+  y = datamice$mort30,
+  # 20/80 split
+  # Declare 80% for training
+  p = .8,
+  # Result formatting
+  list = FALSE
+)
+
+# Now, separate the train and test data
+# using the created sampling
+training <- datamice[inTrain,]
+testing <- datamice[-inTrain,]
+
+# Then, "pre-process" the results
+# (only declaring, not runing yet)
+preProcValues <- 
+  preProcess(training[,-63], # Remove the outcome 
+             method = c("center", 
+                        "scale",
+                        "pca"))
+
+# Crete transformed datasets 
+# using the pre-process step above
+trainTransformed <- 
+  predict(preProcValues, 
+          newdata = training[,-63])
+# Add the outcome
+trainTransformed$mort30 <- training$mort30
+
+# Transform data in testing sample
+testTransformed <- 
+  predict(preProcValues, 
+          newdata = testing[,-63])
 ```
 
 2. Train the models using the training set.
 
+Here I train the models by following a 3-fold cross validation scheme, searching over the space of tunning parameters using a pre-defined grid. The performance metric is classification accuracy ($\frac{\text{Number of correct predictions}}{\text{Total number of predictions}}$). 
+
+The models I will be comparing are:
+
+* **Logistic regression**: a traditional statistical technique for binary outcomes, from the family of generalized linear model using the logit link function. I will train this model twice: one with the "original" (imputed) dataset, and one with the pre-processed version described in the previous question.
+
+* **Random Forest**: a machine learning approach for regression and classification, built from combining multiple decision tress into an ensemble classifier. It can be combined with bagging (training in subsamples of the data or a sample of features) and boosting (re-training focusing on the missclassified observations). Here I used vanilla random forest, deciding the number of variables available for partitioning at each step using cross-validation. I only trained this model on the original dataset.
+
+First, let's look at the results of the logistic regression.
+
+```{r}
+
+# 1: logistic regression
+########################
+
+# No tuning parameters,
+# so, fitting on the entire data
+
+# 1.A. Original Data
+model_logitA <- 
+  train(mort30 ~ ., 
+        data = training, 
+        # use logit for classification
+        method = "glm", 
+        # entire training sample (no CV)
+        trControl = trainControl(method="none")) 
+# Make predictions in the training set
+logitApred <- 
+  predict(model_logitA, newdata=training)
+# Check confusion matrix
+confusionMatrix(logitApred, training$mort30)
+
+# 1.B. Transformed data
+model_logitB <- 
+  train(mort30 ~ ., 
+        data = trainTransformed, 
+        # use logit for classification
+        method = "glm", 
+        # entire training sample (no CV)
+        trControl = trainControl(method="none")) 
+# Make predictions in the training set
+logitBpred <- 
+  predict(model_logitB, newdata=trainTransformed)
+# Check confusion matrix
+confusionMatrix(logitBpred, training$mort30)
+```
+
+We can see that, in the training data, both logistic regression models (using the original and untransformed data) have similar prediction accuracy (around 90\%). Overall, the performance is not great, but this is expected since we are mostly using this model as a base for comparison with random forest.
+
+In the case of random forest, I selected by cross-validation the best number of features available for partitioning at each step, trying three different values, while fixing the number of trees being averaged in the forest to 25. I do this mostly for computational reasons: to make a most substantial improvement with respect to the logistic regression baseline, one would need to search over a wider range of `mtry` options, and also averaging over more trees, which is computationally very expensive.
+
+The resulting accuracy is similar to the logistic regression model, which is dissapointing but not surprising given the just explained constraints I imposed to the parameter tunning.
+
+```{r}
+############################
+# Define the training regime
+############################
+
+# 5-fold cross validation
+train_regime <- 
+  trainControl(method = "cv",
+               number = 3) 
+
+# 2. random forest
+###################
+
+# use CV to define mtry
+# i.e., # variables (random) available 
+# to partition the data at each step
+
+# 2.A. Original data
+model_rfA <- 
+  train(mort30 ~ ., 
+        data = training, 
+        method = "rf", 
+        # Try 2 diff mtry
+        ntree = 50,
+        tuneLength = 3,
+        trControl = train_regime)
+model_rfA
+# Check confusion matrix
+confusionMatrix(model_rfA)
+```
+
+
+```{r, echo = FALSE, eval=FALSE}
+
+  
+# 2.B. Transformed data
+#model_rfB <- 
+#  train(mort30 ~ ., 
+#        data = trainTransformed, 
+#        method = "rf", 
+        # Try diff mtry
+#        tuneLength = 3,
+#        trControl = train_regime)
+#model_rfB
+# Make predictions in the training set
+#rfBpred <- 
+#  predict(model_rfB, newdata=trainTransformed)
+# Check confusion matrix
+#confusionMatrix(rfBpred, training$mort30)
+
+# Other classifiers: NOT RUN!
+
+# 2: linear gaussian process
+############################
+library(kernlab)
+# No tuning parameters,
+# so, fitting on the entire data
+
+# 2.A. Original data
+model_gaussA <- 
+  train(mort30 ~ ., 
+        data = training, 
+        # use logit for classification
+        method = "gaussprLinear", 
+        # entire training sample (no CV)
+        trControl = trainControl(method="none")) 
+# Make predictions in the training set
+gaussApred <- 
+  predict(model_gaussA, newdata=training)
+# Check confusion matrix
+confusionMatrix(gaussApred, training$mort30)
+
+# 2.B. Transformed data
+model_gaussB <- 
+  train(mort30 ~ ., 
+        data = trainTransformed, 
+        # use logit for classification
+        method = "gaussprLinear", 
+        # entire training sample (no CV)
+        trControl = trainControl(method="none")) 
+# Make predictions in the training set
+gaussBpred <- 
+  predict(model_gaussB, newdata=trainTransformed)
+# Check confusion matrix
+confusionMatrix(gaussBpred, training$mort30)
+
+# 3. K-nearest neighbors
+########################
+
+# Use CV to define the number of neighbors
+
+# 3.A. Original data
+model_knnA <- 
+  train(mort30 ~ ., 
+        data = training, 
+        method = "knn", 
+        # Try 3 diff K
+        tuneLength = 3,
+        trControl = train_regime)
+model_knnA
+# Make predictions in the training set
+knnApred <- 
+  predict(model_knnA, newdata=training)
+# Check confusion matrix
+confusionMatrix(knnApred, training$mort30)
+
+# 3.B. Transformed data
+model_knnB <- 
+  train(mort30 ~ ., 
+        data = trainTransformed, 
+        method = "knn", 
+        # Try 3 diff K
+        tuneLength = 3,
+        trControl = train_regime)
+model_knnB
+# Make predictions in the training set
+knnBpred <- 
+  predict(model_knnB, newdata=trainTransformed)
+# Check confusion matrix
+confusionMatrix(knnBpred, training$mort30)
+```
+
 3. Compare model prediction performance on the test set.
+
+Now, let's compare the prediction performance in the test set for both models. As we can see from the confussion matrices below, the results are not actually that different from the cross-validation results. The overall accuracy of the three models is around 90\% in all models, both in the training and testing.
+
+In general, it seems that we are still *underfitting* the model (in the sense that train and test accuracy are very similar to each other without any regularization), so there is a lot of room for improvement.
+
+```{r}
+# Compare model performance in the test data
+# First, see logit model A
+test_logitA <- 
+  predict(model_logitA, newdata = testing)
+confusionMatrix(test_logitA, testing$mort30)
+
+# Then, logit model B
+test_logitB <- 
+  predict(model_logitB, newdata = testTransformed)
+confusionMatrix(test_logitB, testing$mort30)
+
+# Finally, the random forest
+test_rfA <- 
+  predict(model_rfA, newdata = testing)
+confusionMatrix(test_rfA, testing$mort30)
+```
 
