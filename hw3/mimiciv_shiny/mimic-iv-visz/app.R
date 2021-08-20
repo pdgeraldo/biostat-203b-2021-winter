@@ -274,7 +274,7 @@ ui <- dashboardPage(
 server <- function(input, output) {
   
   # Load the dataset
-  path <- "/home/pdgeraldo/biostat-203b-2021-winter/hw3/mimiciv_shiny"
+  path <- "/Users/pdgeraldo/Documents/GitHub/biostat-203b-2021-winter/hw3/mimiciv_shiny"
   mimic <- readRDS(paste0(path,"/icu_cohort.rds"))
   
   ## ---- DEMOGRAPHICS ---- ##
